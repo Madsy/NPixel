@@ -21,6 +21,7 @@ struct Mesh
 
 //float time_elapsed = 8.472656f;
 unsigned int printAccum = 0;
+const int NUM_MESHES = 10;
 
 static void loop(void* data)
 {
@@ -39,7 +40,7 @@ static void loop(void* data)
 
   SR_ClearBuffer(SR_COLOR_BUFFER | SR_DEPTH_BUFFER);
 
-  for(int i = 0; i < 3; ++i){
+  for(int i = 0; i < NUM_MESHES; ++i){
 	float xOffset = 1.8f * std::sin(2.0f * M_PI * time_elapsed * mesh[i].rotationSpeed);
 	
 	Matrix4f worldMatrix =
@@ -70,23 +71,24 @@ static void quit(void* data)
 
 }
 
+static float rnd_min_max(float mn, float mx)
+{
+  return mn + ((float)rand() / (float)RAND_MAX) * (mx - mn);
+}
+
 int main(int argc, char* argv[])
 {
   (void)argc;
   (void)argv;
-  const int NUM_MESHES = 3;
   const int width = 640;
   const int height = 360;
   const int depth = 32;
   Mesh mesh[NUM_MESHES];
 
-  mesh[0].rotationSpeed = 0.1f;
-  mesh[1].rotationSpeed = 0.03f;
-  mesh[2].rotationSpeed = 0.07f;
-  mesh[0].position = Vector4f(0.0f, 0.0f, -2.5f, 1.0f);
-  mesh[1].position = Vector4f(0.1f, 0.0f, -2.0f, 1.0f);
-  mesh[2].position = Vector4f(0.25f, 0.0f,-2.0f, 1.0f);
-
+  for(int i = 0; i < NUM_MESHES; ++i){
+	mesh[i].rotationSpeed = rnd_min_max(0.0f, 1.0f);
+	mesh[i].position = Vector4f(rnd_min_max(-1.0f, 1.0f), rnd_min_max(-1.0f, 1.0f),-2.5f, 1.0f);
+  }
   SR_Init(width, height);
   SR_SetCaption("Tile-Rasterizer Test");
 

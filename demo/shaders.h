@@ -9,7 +9,7 @@ struct Coeff
   Coeff(float a, float b, float c) : A(a), B(b), C(c){}
 };
 
-
+/*
 inline void fs_basic(unsigned int x, unsigned int y, unsigned int* pixel,
 					 const Coeff& wCoeff, const Coeff& texCoordCoeff0U, const Coeff& texCoordCoeff0V)
 {
@@ -36,5 +36,11 @@ inline void fs_basic(unsigned int x, unsigned int y, unsigned int* pixel,
   //  *pixel = (unsigned int)(a << 24) | (r << 16) | (g << 8) | b;
   *pixel = texel;
 }
+*/
 
+inline void fs_basic(unsigned int x, unsigned int y, unsigned int* pixel,
+					 const Coeff& wCoeff, const Coeff& texCoordCoeff0U, const Coeff& texCoordCoeff0V)
+{
+  *pixel = 0xFF00FF00;
+}
 #endif

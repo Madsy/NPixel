@@ -18,15 +18,10 @@ template<typename T> struct Buffer2D
 extern Buffer2D<unsigned int> wc_colorbuffer;
 extern Buffer2D<unsigned short> wc_depthbuffer;
 
-const unsigned int wc_guard_band_width = 4096;
-const unsigned int wc_guard_band_height = 4096;
-
 const unsigned int SR_COLOR_BUFFER=1;
 const unsigned int SR_DEPTH_BUFFER=2;
 
 void SR_InitBuffers(unsigned int width, unsigned int height);
 void SR_ClearBuffer(unsigned int type);
 void SR_Flip();
-inline unsigned int SR_GuardBandOffsetX(int width);
-inline unsigned int SR_GuardBandOffsetY(int height);
 #endif

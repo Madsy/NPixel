@@ -169,26 +169,67 @@ template<class T> void DrawTriangles(T fs)
 
 		// Accept whole block when totally covered
 		if(a == 0xF && b == 0xF && c == 0xF){
+		  /* s = ax + by + c */
+		  float co_w_by = v3.w*(float)y;
+		  float co_u_by = tc2.x*(float)y;
+		  float co_v_by = tc2.y*(float)y;
+		  unsigned int col = y*width;
+		  const unsigned int* tbuf = &wc_texture0->texels[0];
+		  float fTw = (float)wc_texture0->width;
+		  float fTh = (float)wc_texture0->height;
+		  int iTw = wc_texture0->width;
 		  for(int iy = y; iy < y + q; iy++){
 			if(boundTest1 && (iy < 0 || iy > height))
 				continue;
+			float co_w_ax = v1.w*(float)x;
+			float co_u_ax = tc1.x*(float)x;
+			float co_v_ax = tc1.y*(float)x;
 			for(int ix = x; ix < x + q; ix++){
 			  if(boundTest1 && (ix < 0 || ix > width))
 				 continue;
-			  fs(ix, iy, &wc_colorbuffer[ix + iy*width], wCoeff, texCoordCoeffU, texCoordCoeffV);
+			  //fs(ix, iy, &wc_colorbuffer[ix + iy*width], wCoeff, texCoordCoeffU, texCoordCoeffV);
+			  float wi = co_w_ax + co_w_by + v2.w;
+			  float w = 1.0f / wi;
+			  float uw = co_u_ax + co_u_by + tc3.x;
+			  float vw = co_v_ax + co_v_by + tc3.y;
+			  int u = uw*w * fTw;
+			  int v = vw*w * fTh;
+			  wc_colorbuffer[ix + col] = tbuf[u + v*iTw];
+			  co_w_ax += v1.w;
+			  co_u_ax += tc1.x;
+			  co_v_ax += tc1.y;
 			}
+			co_w_by += v3.w;
+			co_u_by += tc2.x;
+			co_v_by += tc2.y;
+			col += width;
 		  }
 		} else { // Partially covered
 		  int CY1 = C1 + DX12 * y0 - DY12 * x0;
 		  int CY2 = C2 + DX23 * y0 - DY23 * x0;
 		  int CY3 = C3 + DX31 * y0 - DY31 * x0;
+		  /* s = ax + by + c */
+		  float co_w_by = v3.w*(float)y;
+		  float co_u_by = tc2.x*(float)y;
+		  float co_v_by = tc2.y*(float)y;
+		  unsigned int col = y*width;
+		  const unsigned int* tbuf = &wc_texture0->texels[0];
+		  float fTw = (float)wc_texture0->width;
+		  float fTh = (float)wc_texture0->height;
+		  int iTw = wc_texture0->width;
 		  for(int iy = y; iy < y + q; iy++){
 			if(boundTest1 && (iy < 0 || iy > height)){
 			  CY1 += FDX12;
 			  CY2 += FDX23;
 			  CY3 += FDX31;
+			  co_w_by += v3.w;
+			  co_u_by += tc2.x;
+			  co_v_by += tc2.y;
 			  continue;
 			}
+			float co_w_ax = v1.w*(float)x;
+			float co_u_ax = tc1.x*(float)x;
+			float co_v_ax = tc1.y*(float)x;
 			int CX1 = CY1;
 			int CX2 = CY2;
 			int CX3 = CY3;
@@ -197,18 +238,35 @@ template<class T> void DrawTriangles(T fs)
 				CX1 -= FDY12;
 				CX2 -= FDY23;
 				CX3 -= FDY31;
+				co_w_ax += v1.w;
+				co_u_ax += tc1.x;
+				co_v_ax += tc1.y;
 				continue;
 			  }
 			  if(CX1 > 0 && CX2 > 0 && CX3 > 0){
-				fs(ix, iy, &wc_colorbuffer[ix + iy*width], wCoeff, texCoordCoeffU, texCoordCoeffV);
+				//fs(ix, iy, &wc_colorbuffer[ix + iy*width], wCoeff, texCoordCoeffU, texCoordCoeffV);
+				float wi = co_w_ax + co_w_by + v2.w;
+				float w = 1.0f / wi;
+				float uw = co_u_ax + co_u_by + tc3.x;
+				float vw = co_v_ax + co_v_by + tc3.y;
+				int u = uw*w * fTw;
+				int v = vw*w * fTh;
+				wc_colorbuffer[ix + col] = tbuf[u + v*iTw];
 			  }
+			  co_w_ax += v1.w;
+			  co_u_ax += tc1.x;
+			  co_v_ax += tc1.y;
 			  CX1 -= FDY12;
 			  CX2 -= FDY23;
 			  CX3 -= FDY31;
 			}
+			co_w_by += v3.w;
+			co_u_by += tc2.x;
+			co_v_by += tc2.y;
 			CY1 += FDX12;
 			CY2 += FDX23;
 			CY3 += FDX31;
+			col += width;
 		  }
 		}
 	  }
@@ -219,11 +277,6 @@ template<class T> void DrawTriangles(T fs)
 Matrix3f ComputeCoeffMatrix(const Vector4f& v1, const Vector4f& v2, const Vector4f& v3)
 {
   //fesetexceptflag
-/*
-  Matrix3f m(Vector3f(v1.x, v2.x, v3.x),
-			 Vector3f(v1.y, v2.y, v3.y),
-			 Vector3f(v1.w, v2.w, v3.w));
-*/
   Matrix3f m(Vector3f(v1.x, v1.y, v1.w),
 			 Vector3f(v2.x, v2.y, v2.w),
 			 Vector3f(v3.x, v3.y, v3.w));
@@ -292,15 +345,6 @@ void SR_Render(unsigned int flags)
 	wc_vertices[i+1] = modelviewProjection * wc_vertices[i+1];
 	wc_vertices[i+2] = modelviewProjection * wc_vertices[i+2];
   }
-
-  /*
-  clip_triangle(Vector4f(-1.0f,  0.0f, 0.0f, 1.0f), flags);
-  clip_triangle(Vector4f( 1.0f,  0.0f, 0.0f, 1.0f), flags);
-  clip_triangle(Vector4f( 0.0f,  1.0f, 0.0f, 1.0f), flags);
-  clip_triangle(Vector4f( 0.0f, -1.0f, 0.0f, 1.0f), flags);
-  clip_triangle(Vector4f( 0.0f,  0.0f,-1.0f, 1.0f), flags);
-  clip_triangle(Vector4f( 0.0f,  0.0f, 1.0f, 1.0f), flags);
-  */
 
   for(int i = 0; i < wc_vertices.size(); i+=3){
 	/* Compute [a,b,c] coefficients */

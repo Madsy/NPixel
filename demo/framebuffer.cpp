@@ -16,21 +16,11 @@ void SR_ClearBuffer(unsigned int type)
 {
   if(type & SR_COLOR_BUFFER)
 	std::fill(wc_colorbuffer.data.begin(),
-			  wc_colorbuffer.data.end(), 0); 
+			  wc_colorbuffer.data.end(), 0);
   if(type & SR_DEPTH_BUFFER)
 	std::fill(wc_depthbuffer.data.begin(),
 			  wc_depthbuffer.data.end(), 65535);
   return;
-}
-
-inline unsigned int SR_GuardBandOffsetX(int width)
-{
-  (wc_guard_band_width - width) / 2;
-}
-
-inline unsigned int SR_GuardBandOffsetY(int height)
-{
-  (wc_guard_band_height - height) / 2;
 }
 
 void SR_Flip()
