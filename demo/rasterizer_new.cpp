@@ -23,20 +23,6 @@ inline int fpceil10(int fp)
   return (fp & 1023) ? ((fp & ~1023) + 1024) : fp;
 }
 
-
-  /*
-	wc_colorbuffer
-	wc_depthbuffer
-	wc_vertices
-	wc_tcoords0
-	wc_tcoords1
-	wc_normals
-	wc_colors
-	wc_modelview;
-	wc_projection;
-  */
-
-
 template<class T> void DrawTriangles(T fs)
 {
   using std::min;
@@ -47,16 +33,13 @@ template<class T> void DrawTriangles(T fs)
     Vector4f& v2 = wc_vertices[i+2];
     Vector4f& v3 = wc_vertices[i+1];
 
-    //Vector4f& tc_0_1 = wc_tcoords0[i+0];
-    //Vector4f& tc_0_2 = wc_tcoords0[i+2];
-    //Vector4f& tc_0_3 = wc_tcoords0[i+1];
+    Vector4f& tc1 = wc_tcoords0[i+0];
+    Vector4f& tc2 = wc_tcoords0[i+1];
+    Vector4f& tc3 = wc_tcoords0[i+2];
 
 	Coeff wCoeff(wc_vertices[i+0].w, wc_vertices[i+1].w, wc_vertices[i+2].w);
-	Coeff texCoordCoeff0U(wc_tcoords0[i+0].x, wc_tcoords0[i+1].x, wc_tcoords0[i+2].x);
-	Coeff texCoordCoeff0V(wc_tcoords0[i+0].y, wc_tcoords0[i+1].y, wc_tcoords0[i+2].y);
-	//Coeff texCoordCoeff1U(wc_tcoords1[i+0].x, wc_tcoords1[i+1].x, wc_tcoords1[i+2].x);
-	//Coeff texCoordCoeff1V(wc_tcoords1[i+0].y, wc_tcoords1[i+1].y, wc_tcoords1[i+2].y);
-
+	Coeff texCoordCoeffU(tc1.x, tc2.x, tc3.x);
+	Coeff texCoordCoeffV(tc1.y, tc2.y, tc3.y);
 
 	// 28.4 fixed-point coordinates
 	const int Y1 = (int)(16.0f * v1.y);
@@ -98,8 +81,10 @@ template<class T> void DrawTriangles(T fs)
 	minx &= ~(q - 1);
 	miny &= ~(q - 1);
 
-	const unsigned int stride = wc_colorbuffer.w;
-	//buffer += (miny*stride);
+	unsigned int width = wc_colorbuffer.w;
+	unsigned int height = wc_colorbuffer.h;
+
+	//buffer += (miny*width);
 	int	colOffs = miny;
 	int colTileOffs = 0;
 	// Half-edge constants
@@ -117,10 +102,45 @@ template<class T> void DrawTriangles(T fs)
 	  for(int x = minx; x < maxx; x += q){
 
 		// Corners of block
-		int x0 = x << 4;
-		int x1 = (x + q - 1) << 4;
-		int y0 = y << 4;
-		int y1 = (y + q - 1) << 4;
+		int x0 = x;
+		int x1 = (x + q - 1);
+		int y0 = y;
+		int y1 = (y + q - 1);
+
+		// test block against x and y frustum planes
+		bool px0min = x0 > 0;
+		bool px0max = x0 < width;
+		bool py0min = y0 > 0;
+		bool py0max = y0 < height;
+
+		bool px1min = x1 > 0;
+		bool px1max = x1 < width;
+		bool py1min = y1 > 0;
+		bool py1max = y1 < height;
+
+		bool boundTest1 = true;
+
+		int pflags0 = (px0min << 3) | (px1min << 2) | (px0max << 1) | px1max;
+		int pflags1 = (py0min << 3) | (py1min << 2) | (py0max << 1) | py1max;
+		
+		if(pflags0 == 0xF && pflags1 == 0xF){
+		  //Completely inside the frustum
+		  boundTest1 = false;
+		} else if(pflags0 == 0x3 || pflags0 == 0xC ||
+				  pflags1 == 0x3 || pflags1 == 0xC){
+		  // pflags0 == 0x3: outside right X plane
+		  // pflags0 == 0xC: outside left X plane
+		  // pflags1 == 0x3: outside bottom Y plane
+		  // pflags1 == 0xC: outside top Y plane
+		  continue;
+		} else {
+		  boundTest1 = true;
+		}
+
+		x0 <<= 4;
+		x1 <<= 4;
+		y0 <<= 4;
+		y1 <<= 4;
 
 		// Evaluate half-space functions
 		bool a00 = C1 + DX12 * y0 - DY12 * x0 > 0;
@@ -150,9 +170,12 @@ template<class T> void DrawTriangles(T fs)
 		// Accept whole block when totally covered
 		if(a == 0xF && b == 0xF && c == 0xF){
 		  for(int iy = y; iy < y + q; iy++){
+			if(boundTest1 && (iy < 0 || iy > height))
+				continue;
 			for(int ix = x; ix < x + q; ix++){
-			  //wc_colorbuffer[ix + iy*stride] = 0xFFFF00FF;
-			  fs(ix, iy, &wc_colorbuffer[ix + iy*stride], wCoeff, texCoordCoeff0U, texCoordCoeff0V);
+			  if(boundTest1 && (ix < 0 || ix > width))
+				 continue;
+			  fs(ix, iy, &wc_colorbuffer[ix + iy*width], wCoeff, texCoordCoeffU, texCoordCoeffV);
 			}
 		  }
 		} else { // Partially covered
@@ -160,13 +183,24 @@ template<class T> void DrawTriangles(T fs)
 		  int CY2 = C2 + DX23 * y0 - DY23 * x0;
 		  int CY3 = C3 + DX31 * y0 - DY31 * x0;
 		  for(int iy = y; iy < y + q; iy++){
+			if(boundTest1 && (iy < 0 || iy > height)){
+			  CY1 += FDX12;
+			  CY2 += FDX23;
+			  CY3 += FDX31;
+			  continue;
+			}
 			int CX1 = CY1;
 			int CX2 = CY2;
 			int CX3 = CY3;
 			for(int ix = x; ix < x + q; ix++){
+			  if(boundTest1 && (ix < 0 || ix > height)){
+				CX1 -= FDY12;
+				CX2 -= FDY23;
+				CX3 -= FDY31;
+				continue;
+			  }
 			  if(CX1 > 0 && CX2 > 0 && CX3 > 0){
-				//wc_colorbuffer[ix + iy*stride] = 0xFFFFFFFF;
-				fs(ix, iy, &wc_colorbuffer[ix + iy*stride], wCoeff, texCoordCoeff0U, texCoordCoeff0V);
+				fs(ix, iy, &wc_colorbuffer[ix + iy*width], wCoeff, texCoordCoeffU, texCoordCoeffV);
 			  }
 			  CX1 -= FDY12;
 			  CX2 -= FDY23;
@@ -259,12 +293,14 @@ void SR_Render(unsigned int flags)
 	wc_vertices[i+2] = modelviewProjection * wc_vertices[i+2];
   }
 
+  /*
   clip_triangle(Vector4f(-1.0f,  0.0f, 0.0f, 1.0f), flags);
   clip_triangle(Vector4f( 1.0f,  0.0f, 0.0f, 1.0f), flags);
   clip_triangle(Vector4f( 0.0f,  1.0f, 0.0f, 1.0f), flags);
   clip_triangle(Vector4f( 0.0f, -1.0f, 0.0f, 1.0f), flags);
   clip_triangle(Vector4f( 0.0f,  0.0f,-1.0f, 1.0f), flags);
   clip_triangle(Vector4f( 0.0f,  0.0f, 1.0f, 1.0f), flags);
+  */
 
   for(int i = 0; i < wc_vertices.size(); i+=3){
 	/* Compute [a,b,c] coefficients */

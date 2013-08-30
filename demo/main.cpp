@@ -20,6 +20,7 @@ struct Mesh
 };
 
 //float time_elapsed = 8.472656f;
+unsigned int printAccum = 0;
 
 static void loop(void* data)
 {
@@ -54,6 +55,14 @@ static void loop(void* data)
 	SR_Render(SR_TEXCOORD0);
   }
   SR_Flip();
+  float t2 = (float)SDL_GetTicks() * 0.001f;
+  float tdiff = t2 - time_elapsed;
+  if(tdiff != 0.0f) tdiff = 1.0f / tdiff;
+  if(printAccum == 0xFF){
+	printf("fps: %f\n", tdiff);
+	printAccum = 0;
+  }
+  printAccum++;
 }
 
 static void quit(void* data)
