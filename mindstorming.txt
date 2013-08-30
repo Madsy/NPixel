@@ -1,0 +1,152 @@
+/*
+Algorithm for computing barycentric coordinates
+(x,y) : The cartesian point to find the coordinates for
+(x1,y1), (x2,y2), (x3,y3) : The triangle vertex positions
+
+denom = (y2 - y3)(x1 - x3) + (x3 - x2)(y1 - y3)
+b1 = ((y2 - y3)(x - x3) + (x3 - x2)(y - y3)) / denom
+b2 = ((y3 - y1)(x - x3) + (x1 - x3)(y - y3)) / denom
+b3 = 1 - b1 - b2
+
+Expand:
+b1 = (y2*x - y2*x3 - y3*x + y3*x3) + (x3*y - x3*y3 - x2*y + x2*y3)
+b2 = (y3*x - y3*x3 - y1*x + y1*x3) + (x1*y - x1*y3 - x3*y + x3*y3)
+b3 = 1 - b1 - b2
+
+Since the only thing that changes per pixel is 'x' and 'y', we can rewrite it like so:
+
+Setup:
+denomInv = 1 / ((y2 - y3)(x1 - x3) + (x3 - x2)(y1 - y3))
+x = x min x of bounding box
+y = y min y of bounding box
+
+b1Term1 = y2*x
+b1Term2 = y3*x
+b1Term3 = x3*y
+b1Term4 = x2*y
+b1TermConst1 = (-y2*x3) + y3*x3
+b1TermConst2 = (-x3*y3) + x2*y3
+b1TermConst = b1TermConst1 + b1TermConst2 
+
+b2Term1 = y3*x
+b2Term2 = y1*x
+b2Term3 = x1*y
+b2Term4 = x3*y
+b2TermConst1 = (-y3*x3) + y1*x3
+b2TermConst2 = (-x1*y3) + x3*y3
+b2TermConst = b2TermConst1 + b2TermConst2
+compute s0/w0, s1/w1, s2/w2 as usual
+compute 1/w0, 1/w1, 1/w2 as usual
+
+Loop:
+for every y from ystart to yend:
+  for every x from xstart to xend:
+    b1 = (b1TermConst + b1Term1 + b1Term3 - b1Term2 - b1Term4) * denomInv
+    b2 = (b2TermConst + b2Term1 + b2Term3 - b2Term2 - b2Term4) * denomInv
+    b3 = 1 - b1 - b2
+    "s/w" = s0w0*b1 + s1w1*b2 + s2w2*b3
+    "1/w" = w0*b1 + w1*b2 + w2*b3
+    w = 1 / "1/w"
+    s = "s/w" * w
+    b1Term1 += y2
+    b1Term2 -= y3
+    b2Term1 += y3
+    b2Term2 -= y1
+  b1Term3 += x3
+  b1Term4 -= x2
+  b2Term3 += x1
+  b2Term4 -= x3
+
+Operations in the triangle setup:
+3 divisions, 16 multiplications and 10 sub/additions
+3 divisions per scalar
+Operations per pixel: 
+3 multiplications and 2 additions per scalar
+1 division, 5 multiplications and 16 sub/additions (constant per pixel)
+Operations per column:
+4 sub/additions
+*/
+
+
+/* Compare psuedo-code above to
+«Triangle Scan Conversion using 2D Homogeneous Coordinates» by Marc Olano1 and Trey Greer2:
+
+X,Y are coordinates in screenspace
+x0,y0,w0 .. are coordinates in clipspace
+a,b,c are coefficients
+s0,s1,s2 are the scalars to interpolate
+s is the interpolated scalar
+
+setup:
+
+    [x0, x1, x2]-¹
+M = [y0, y1, y2]
+    [w0, w1, w2]                                       
+                      
+[a, b, c] = [s0, s1, s2] x M
+[1/w0, 1/w1, 1/w2] = [1,1,1] x M
+                
+loop:                             
+"s/w" = a*X + b*Y + c
+w =  1 / (wi0*X + wi1*Y + wi2)
+s = (a*X + b*Y + c) * (1 / (wi0*X + wi1*Y + wi2))
+
+optimized setup:
+Compute matrix M, [a, b, c]  and [wi0, wi1, wi2] as usual
+aX = a*X
+bY = b*y
+wiX0 = wi0*X
+wiY1 = wi1*Y
+optimized loop:
+"s/w" = aX + bY + c
+w = 1 / (wiX0 + wiY1 + wi2)
+aX += a
+bY += b
+wiX0 += wi0
+wiY0 += wi1
+s = "s/w" * 2
+
+Operations in the triangle setup:
+12 multiplications, 4 sub/additions for computing matrix determinant
+18 multiplications, 9 sub/additions for computing matrix cofactors and adjoint
+9 multiplications and 1 division for computing matrix inverse
+9 multiplications and 6 additions per scalar (vector-matrix multiplication)
+
+Operations per pixel: 
+1 multiplication,  3 additions (per scalar)
+1 division, 0 multiplications, 3 additions (constant per pixel)
+Operations per column:
+1 addition (per scalar)
+1 addition (constant per column)
+*/
+
+
+
+/* Final comparison:
+Algo #1 (barycentric coordinates):
+Operations in the triangle setup:
+3 divisions, 16 multiplications and 10 sub/additions (constant)
+3 divisions   0 multiplications and  0 sub/additions (per scalar)
+Operations per pixel: 
+1 division,   5 multiplications and 16 sub/additions (constant)
+0 divisions,  3 multiplications and 2 additions (per scalar)
+Operations per column:
+4 sub/additions (constant)
+
+Algo #2 (homogeneous coordinates):
+Operations in the triangle setup: 
+9 divisions, 30 multiplications and 13 sub/additions (constant)
+0 divisions,  9 multiplications and  6 sub/additions (per scalar)
+Operations per pixel: 
+1 division,   0 multiplications and  3 sub/additions (constant)
+0 divisions,  1 multiplication  and  3 additions (per scalar)
+Operations per column:
+0 divisions,  0 multiplications and 1 addition (per scalar)
+0 divisions,  0 multiplications and 1 addition (constant per column)
+*/
+
+
+
+void DrawTriangle(const Triangle& tri){
+  
+} 
