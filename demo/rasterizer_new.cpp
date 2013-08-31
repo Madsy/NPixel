@@ -13,6 +13,18 @@
 #include "myassert.h"
 #include "shaders.h"
 
+inline int iround(float f)
+{
+  int r;
+
+  asm volatile ("fistpl %[output]\n"
+	   : [output] "=m" (r)
+	   : [input] "t" (f)
+	   : "st(0)");
+
+  return r;
+}
+
 inline int fpceil15(int fp)
 {
   return (fp & 32767) ? ((fp & ~32767) + 32768) : fp;
@@ -23,10 +35,15 @@ inline int fpceil10(int fp)
   return (fp & 1023) ? ((fp & ~1023) + 1024) : fp;
 }
 
+//int zmin, zmax;
+
 template<class T> void DrawTriangles(T fs)
 {
   using std::min;
   using std::max;
+
+  //zmin = 65536;
+  //zmax = -65536;
 
   for(int i=0; i<wc_vertices.size(); i+=3){
     Vector4f& v1 = wc_vertices[i+0];
@@ -119,7 +136,7 @@ template<class T> void DrawTriangles(T fs)
 		bool py1max = y1 < height;
 
 		bool boundTest1 = true;
-
+		/*
 		int pflags0 = (px0min << 3) | (px1min << 2) | (px0max << 1) | px1max;
 		int pflags1 = (py0min << 3) | (py1min << 2) | (py0max << 1) | py1max;
 		
@@ -136,7 +153,7 @@ template<class T> void DrawTriangles(T fs)
 		} else {
 		  boundTest1 = true;
 		}
-
+		*/
 		x0 <<= 4;
 		x1 <<= 4;
 		y0 <<= 4;
@@ -167,106 +184,166 @@ template<class T> void DrawTriangles(T fs)
 		// Skip block when outside an edge
 		if(a == 0x0 || b == 0x0 || c == 0x0) continue;
 
+		const int coeff_precision_base = 20;
+		const float coeff_precision = (float)(1 << coeff_precision_base);
+
+		/* s = Ax + By + C */
+		const int Aw = v1.w * coeff_precision;
+		const int Bw = v3.w * coeff_precision;
+		const int Cw = v2.w * coeff_precision;
+		const int Az = v1.z * coeff_precision;
+		const int Bz = v3.z * coeff_precision;
+		const int Cz = v2.z * coeff_precision;
+		const int Au = tc1.x * coeff_precision;
+		const int Bu = tc2.x * coeff_precision;
+		const int Cu = tc3.x * coeff_precision;
+		const int Av = tc1.y * coeff_precision;
+		const int Bv = tc2.y * coeff_precision;
+		const int Cv = tc3.y * coeff_precision;
 		// Accept whole block when totally covered
 		if(a == 0xF && b == 0xF && c == 0xF){
-		  /* s = ax + by + c */
-		  float co_w_by = v3.w*(float)y;
-		  float co_u_by = tc2.x*(float)y;
-		  float co_v_by = tc2.y*(float)y;
+		  int co_w_by = Bw*y;
+		  int co_z_by = Bz*y;
+		  int co_u_by = Bu*y;
+		  int co_v_by = Bv*y;
 		  unsigned int col = y*width;
 		  const unsigned int* tbuf = &wc_texture0->texels[0];
-		  float fTw = (float)wc_texture0->width;
-		  float fTh = (float)wc_texture0->height;
 		  int iTw = wc_texture0->width;
+		  int iTh = wc_texture0->height;
 		  for(int iy = y; iy < y + q; iy++){
-			if(boundTest1 && (iy < 0 || iy > height))
-				continue;
-			float co_w_ax = v1.w*(float)x;
-			float co_u_ax = tc1.x*(float)x;
-			float co_v_ax = tc1.y*(float)x;
-			for(int ix = x; ix < x + q; ix++){
-			  if(boundTest1 && (ix < 0 || ix > width))
-				 continue;
-			  //fs(ix, iy, &wc_colorbuffer[ix + iy*width], wCoeff, texCoordCoeffU, texCoordCoeffV);
-			  float wi = co_w_ax + co_w_by + v2.w;
-			  float w = 1.0f / wi;
-			  float uw = co_u_ax + co_u_by + tc3.x;
-			  float vw = co_v_ax + co_v_by + tc3.y;
-			  int u = uw*w * fTw;
-			  int v = vw*w * fTh;
-			  wc_colorbuffer[ix + col] = tbuf[u + v*iTw];
-			  co_w_ax += v1.w;
-			  co_u_ax += tc1.x;
-			  co_v_ax += tc1.y;
+			if(boundTest1 && ((iy < 0) || (iy >= height))){
+			  co_w_by += Bw;
+			  co_z_by += Bz;
+			  co_u_by += Bu;
+			  co_v_by += Bv;
+			  col += width;
+			  continue;
 			}
-			co_w_by += v3.w;
-			co_u_by += tc2.x;
-			co_v_by += tc2.y;
+			int co_w_ax = Aw*x;
+			int co_z_ax = Az*x;
+			int co_u_ax = Au*x;
+			int co_v_ax = Av*x;
+			for(int ix = x; ix < x + q; ix++){
+			  if(boundTest1 && ((ix < 0) || (ix >= width))){
+				co_w_ax += Aw;
+				co_z_ax += Az;
+				co_u_ax += Au;
+				co_v_ax += Av;
+				continue;
+			  }
+			  //int z = co_z_ax + co_z_by + Cz;
+			  //z = (z >> (coeff_precision_base - 16)) & 0xFFFF;
+			  float ndcX = (float)ix*(2.0f / (float)width) - 1.0f;
+			  float ndcY = (float)iy*(2.0f / (float)height) - 1.0f;
+			  float fZ = (v1.z*ndcX + v3.z*ndcY + v2.z);
+			  //ASSERT(fZ > 0.0f && fZ <= 1.0);
+			  unsigned short z = fZ * 65535.0f;
+			  //zmin, zmax
+			  //if(z < zmin) zmin = z;
+			  //if(z > zmax) zmax = z;
+			  if(z < wc_depthbuffer.data[ix + col]){
+				wc_depthbuffer.data[ix + col] = z;
+				int wi = co_w_ax + co_w_by + Cw;
+				int w = ((long long)1<<(coeff_precision_base * 2)) / wi;
+				int uw = co_u_ax + co_u_by + Cu;
+				int vw = co_v_ax + co_v_by + Cv;
+				int u = ((long long)uw*w*iTw) >> (coeff_precision_base * 2);
+				int v = ((long long)vw*w*iTh) >> (coeff_precision_base * 2);
+				int idxTex = u + v*iTw;
+				wc_colorbuffer[ix + col] = tbuf[idxTex];
+			  }
+			  co_w_ax += Aw;
+			  co_z_ax += Az;
+			  co_u_ax += Au;
+			  co_v_ax += Av;
+			}
+			co_w_by += Bw;
+			co_z_by += Bz;
+			co_u_by += Bu;
+			co_v_by += Bv;
 			col += width;
 		  }
 		} else { // Partially covered
 		  int CY1 = C1 + DX12 * y0 - DY12 * x0;
 		  int CY2 = C2 + DX23 * y0 - DY23 * x0;
 		  int CY3 = C3 + DX31 * y0 - DY31 * x0;
-		  /* s = ax + by + c */
-		  float co_w_by = v3.w*(float)y;
-		  float co_u_by = tc2.x*(float)y;
-		  float co_v_by = tc2.y*(float)y;
+		  int co_w_by = Bw*y;
+		  int co_z_by = Bz*y;
+		  int co_u_by = Bu*y;
+		  int co_v_by = Bv*y;
 		  unsigned int col = y*width;
 		  const unsigned int* tbuf = &wc_texture0->texels[0];
-		  float fTw = (float)wc_texture0->width;
-		  float fTh = (float)wc_texture0->height;
 		  int iTw = wc_texture0->width;
+		  int iTh = wc_texture0->height;
 		  for(int iy = y; iy < y + q; iy++){
-			if(boundTest1 && (iy < 0 || iy > height)){
+			if(boundTest1 && (iy < 0 || iy >= height)){
 			  CY1 += FDX12;
 			  CY2 += FDX23;
 			  CY3 += FDX31;
-			  co_w_by += v3.w;
-			  co_u_by += tc2.x;
-			  co_v_by += tc2.y;
+			  co_w_by += Bw;
+			  co_z_by += Bz;
+			  co_u_by += Bu;
+			  co_v_by += Bv;
+			  col += width;
 			  continue;
 			}
-			float co_w_ax = v1.w*(float)x;
-			float co_u_ax = tc1.x*(float)x;
-			float co_v_ax = tc1.y*(float)x;
 			int CX1 = CY1;
 			int CX2 = CY2;
 			int CX3 = CY3;
+			int co_w_ax = Aw*x;
+			int co_z_ax = Az*x;
+			int co_u_ax = Au*x;
+			int co_v_ax = Av*x;
 			for(int ix = x; ix < x + q; ix++){
-			  if(boundTest1 && (ix < 0 || ix > height)){
+			  if(boundTest1 && (ix < 0 || ix >= width)){
+				co_w_ax += Aw;
+				co_z_ax += Az;
+				co_u_ax += Au;
+				co_v_ax += Av;
 				CX1 -= FDY12;
 				CX2 -= FDY23;
 				CX3 -= FDY31;
-				co_w_ax += v1.w;
-				co_u_ax += tc1.x;
-				co_v_ax += tc1.y;
 				continue;
 			  }
 			  if(CX1 > 0 && CX2 > 0 && CX3 > 0){
-				//fs(ix, iy, &wc_colorbuffer[ix + iy*width], wCoeff, texCoordCoeffU, texCoordCoeffV);
-				float wi = co_w_ax + co_w_by + v2.w;
-				float w = 1.0f / wi;
-				float uw = co_u_ax + co_u_by + tc3.x;
-				float vw = co_v_ax + co_v_by + tc3.y;
-				int u = uw*w * fTw;
-				int v = vw*w * fTh;
-				wc_colorbuffer[ix + col] = tbuf[u + v*iTw];
+				//int z = co_z_ax + co_z_by + Cz;
+				//z = (z >> (coeff_precision_base - 16)) & 0xFFFF;
+				float ndcX = (float)ix*(2.0f / (float)width) - 1.0f;
+				float ndcY = (float)iy*(2.0f / (float)height) - 1.0f;
+				float fZ = (v1.z*ndcX + v3.z*ndcY + v2.z);
+				//ASSERT(fZ >= 0.0f && fZ <= 1.0);
+				unsigned short z = fZ * 65535.0f;
+				//zmin, zmax
+				//if(z < zmin) zmin = z;
+				//if(z > zmax) zmax = z;
+				if(z < wc_depthbuffer.data[ix + col]){
+				  wc_depthbuffer.data[ix + col] = z;
+				  int wi = co_w_ax + co_w_by + Cw;
+				  int w = ((long long)1<<(coeff_precision_base * 2)) / wi;
+				  int uw = co_u_ax + co_u_by + Cu;
+				  int vw = co_v_ax + co_v_by + Cv;
+				  int u = ((long long)uw*w*iTw) >> (coeff_precision_base * 2);
+				  int v = ((long long)vw*w*iTh) >> (coeff_precision_base * 2);
+				  int idxTex = u + v*iTw;
+				  wc_colorbuffer[ix + col] = tbuf[idxTex];
+				}
 			  }
-			  co_w_ax += v1.w;
-			  co_u_ax += tc1.x;
-			  co_v_ax += tc1.y;
+			  co_w_ax += Aw;
+			  co_z_ax += Az;
+			  co_u_ax += Au;
+			  co_v_ax += Av;
 			  CX1 -= FDY12;
 			  CX2 -= FDY23;
 			  CX3 -= FDY31;
 			}
-			co_w_by += v3.w;
-			co_u_by += tc2.x;
-			co_v_by += tc2.y;
+			co_w_by += Bw;
+			co_z_by += Bz;
+			co_u_by += Bu;
+			co_v_by += Bv;
+			col += width;
 			CY1 += FDX12;
 			CY2 += FDX23;
 			CY3 += FDX31;
-			col += width;
 		  }
 		}
 	  }
@@ -274,21 +351,25 @@ template<class T> void DrawTriangles(T fs)
   }
 }
 
-Matrix3f ComputeCoeffMatrix(const Vector4f& v1, const Vector4f& v2, const Vector4f& v3)
+bool ComputeCoeffMatrix(const Vector4f& v1, const Vector4f& v2, const Vector4f& v3, Matrix3f& m)
 {
   //fesetexceptflag
-  Matrix3f m(Vector3f(v1.x, v1.y, v1.w),
-			 Vector3f(v2.x, v2.y, v2.w),
-			 Vector3f(v3.x, v3.y, v3.w));
-  const float eps = 0.0001f;
+  m = Matrix3f(Vector3f(v1.x, v1.y, v1.w),
+			   Vector3f(v2.x, v2.y, v2.w),
+			   Vector3f(v3.x, v3.y, v3.w));
+  const float eps = (1.0f / 128.0f);
   float det = 
 	m[0]*(m[4]*m[8] - m[5]*m[7]) +
 	m[1]*(m[5]*m[6] - m[3]*m[8]) +
 	m[2]*(m[3]*m[7] - m[4]*m[6]);
 
-  //ASSERT(std::abs(det) > eps);
-  if(std::abs(det) < eps)
-	return Matrix3f();
+  if(std::abs(det) < 0.0125f){
+	return false;
+  }
+
+  if(det < 0.0f){
+	return false;
+  }
 
   // Matrix cofactors
   float c00 = +(m[4]*m[8] - m[5]*m[7]); //4,5,7,8
@@ -313,7 +394,7 @@ Matrix3f ComputeCoeffMatrix(const Vector4f& v1, const Vector4f& v2, const Vector
   m[3] *= det; m[4] *= det; m[5] *= det;
   m[6] *= det; m[7] *= det; m[8] *= det;
 
-  return m;
+  return true;
 }
 
 inline static void SR_InterpTransform(float& f1, float& f2, float& f3, const Matrix3f& m)
@@ -324,8 +405,11 @@ inline static void SR_InterpTransform(float& f1, float& f2, float& f3, const Mat
   /* Multiply by coefficient matrix */
   v = m * v;
   /* Assign the transformed values back */
-  f1 = v.x*(2.0f / 640.0f);
-  f2 = v.y*(2.0f / 360.0f);
+  float width = wc_colorbuffer.w;
+  float height = wc_colorbuffer.h;
+
+  f1 = v.x*(2.0f / width);
+  f2 = v.y*(2.0f / height);
   f3 = v.z - v.x - v.y;
 }
 
@@ -340,15 +424,19 @@ inline static void SR_InterpTransform(Vector4f& v1, Vector4f& v2, Vector4f& v3, 
 void SR_Render(unsigned int flags)
 {
   Matrix4f modelviewProjection = wc_projection * wc_modelview;
-  for(int i = 0; i < wc_vertices.size(); i+=3){
+  size_t prevSize = wc_vertices.size();
+  for(int i = 0; i < prevSize; i+=3){
 	wc_vertices[i+0] = modelviewProjection * wc_vertices[i+0];
 	wc_vertices[i+1] = modelviewProjection * wc_vertices[i+1];
 	wc_vertices[i+2] = modelviewProjection * wc_vertices[i+2];
   }
 
-  for(int i = 0; i < wc_vertices.size(); i+=3){
+  size_t oldSize = wc_vertices.size();
+  for(int i = 0; i < oldSize; i+=3){
 	/* Compute [a,b,c] coefficients */
-	Matrix3f m = ComputeCoeffMatrix(wc_vertices[i+0], wc_vertices[i+1], wc_vertices[i+2]);
+	Matrix3f m;
+	bool b = ComputeCoeffMatrix(wc_vertices[i+0], wc_vertices[i+1], wc_vertices[i+2], m);
+	if(!b) continue;
 
 	//Project() :
 	//Compute screen space coordinates for x and y
@@ -356,13 +444,19 @@ void SR_Render(unsigned int flags)
 	wc_vertices[i+0] = project(wc_vertices[i+0], wc_colorbuffer.w, wc_colorbuffer.h);
 	wc_vertices[i+1] = project(wc_vertices[i+1], wc_colorbuffer.w, wc_colorbuffer.h);
 	wc_vertices[i+2] = project(wc_vertices[i+2], wc_colorbuffer.w, wc_colorbuffer.h);
-
+	
 	//Must interpolate z linearly in screenspace!
 	//To get the coefficients required for an affine interpolation, simply multiply z with w
 	wc_vertices[i+0].z *= wc_vertices[i+0].w;
 	wc_vertices[i+1].z *= wc_vertices[i+1].w;
 	wc_vertices[i+2].z *= wc_vertices[i+2].w;
-	SR_InterpTransform(wc_vertices[i+0].z, wc_vertices[i+1].z, wc_vertices[i+2].z, m);
+	//SR_InterpTransform(wc_vertices[i+0].z, wc_vertices[i+1].z, wc_vertices[i+2].z, m);
+
+	Vector3f zv(wc_vertices[i+0].z, wc_vertices[i+1].z, wc_vertices[i+2].z);
+	zv = m * zv;
+	wc_vertices[i+0].z = zv.x;
+	wc_vertices[i+1].z = zv.y;
+	wc_vertices[i+2].z = zv.z;
 
 	// To get "1.0f / w", multiply the 3D Vector [1,1,1] with the coefficient matrix.
 	// We don't need w anymore after this point. It's stored as a part of the matrix.
@@ -378,7 +472,16 @@ void SR_Render(unsigned int flags)
 	  SR_InterpTransform(wc_normals[i+0], wc_normals[i+1], wc_normals[i+2], m);
 	if(flags & SR_COLOR)
 	  SR_InterpTransform(wc_colors[i+0], wc_colors[i+1], wc_colors[i+2], m);
+
+	wc_vertices.push_back(wc_vertices[i+0]);
+	wc_vertices.push_back(wc_vertices[i+1]);
+	wc_vertices.push_back(wc_vertices[i+2]);
+	wc_tcoords0.push_back(wc_tcoords0[i+0]);
+	wc_tcoords0.push_back(wc_tcoords0[i+1]);
+	wc_tcoords0.push_back(wc_tcoords0[i+2]);
   }
+  wc_vertices.erase(wc_vertices.begin(), wc_vertices.begin() + oldSize);
+  wc_tcoords0.erase(wc_tcoords0.begin(), wc_tcoords0.begin() + oldSize);
 
   switch(flags){
   case SR_TEXCOORD0:

@@ -169,8 +169,8 @@ inline Matrix4f perspective(float fov, float aspect, float near, float far)
     if(fov > 179.0f)
         fov = 179.0f;
     float f = 1.0f / std::tan(degtorad(fov) * 0.5f);
-    float y = f;
-    float x = f/aspect;
+    float y = f*aspect;
+    float x = f;
     float z1 = (far+near)/(near-far);
     float z2 = (2.0f*far*near)/(near-far);
     Matrix4f m(Vector4f(x, 0,  0,  0),

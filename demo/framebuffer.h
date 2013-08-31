@@ -5,7 +5,10 @@
 
 template<typename T> struct Buffer2D
 {
-    Buffer2D(unsigned int width, unsigned int height) : w(width), h(height), data(width*height){}
+    Buffer2D(unsigned int width, unsigned int height) : w(width), h(height), data(width*height)
+    {
+	  data.resize(width*height);
+	}
     Buffer2D() : w(0), h(0), data(){}
     T& operator[](size_t index){ return data[index]; }
     const T& operator[](size_t index) const { return data[index]; }

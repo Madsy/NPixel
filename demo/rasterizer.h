@@ -9,6 +9,9 @@ void DrawTriangle();
    in DrawTriangle */
 Matrix3f ComputeCoeffMatrix(const Vector4f& v1, const Vector4f& v2, const Vector4f& v3);
 
+//extern int zmin;
+//extern int zmax;
+
 void SR_Render(unsigned int flags);
 #endif
 
