@@ -66,7 +66,6 @@ template<class T> void DrawTriangles(T fs)
 	const int X2 = (int)(16.0f * v2.x);
 	const int X3 = (int)(16.0f * v3.x);
 
-	bool doOnce = true; //debug
 	// Deltas
 	
 	const int DX12 = X1 - X2;
@@ -125,6 +124,8 @@ template<class T> void DrawTriangles(T fs)
 		int y1 = (y + q - 1);
 
 		// test block against x and y frustum planes
+		bool boundTest1 = true;
+		/*
 		bool px0min = x0 > 0;
 		bool px0max = x0 < width;
 		bool py0min = y0 > 0;
@@ -135,8 +136,6 @@ template<class T> void DrawTriangles(T fs)
 		bool py1min = y1 > 0;
 		bool py1max = y1 < height;
 
-		bool boundTest1 = true;
-		/*
 		int pflags0 = (px0min << 3) | (px1min << 2) | (px0max << 1) | px1max;
 		int pflags1 = (py0min << 3) | (py1min << 2) | (py0max << 1) | py1max;
 		
@@ -184,167 +183,160 @@ template<class T> void DrawTriangles(T fs)
 		// Skip block when outside an edge
 		if(a == 0x0 || b == 0x0 || c == 0x0) continue;
 
-		const int coeff_precision_base = 20;
-		const float coeff_precision = (float)(1 << coeff_precision_base);
+		const int coeff_precision_base = 11;
+		const int ndc_precision_base = 30;
+		const int depth_precision_base = 16;
+		const float f_coeff_precision = (float)(1 << coeff_precision_base);
+		const float f_ndc_precision = (float)(1 << ndc_precision_base);
+		const float f_depth_precision = (float)(1 << depth_precision_base);
+		const int i_coeff_precision = 1 << coeff_precision_base;
+		const int i_ndc_precision = 1 << ndc_precision_base;
+		const int i_depth_precision = 1 << depth_precision_base;
 
 		/* s = Ax + By + C */
-		const int Aw = v1.w * coeff_precision;
-		const int Bw = v3.w * coeff_precision;
-		const int Cw = v2.w * coeff_precision;
-		const int Az = v1.z * coeff_precision;
-		const int Bz = v3.z * coeff_precision;
-		const int Cz = v2.z * coeff_precision;
-		const int Au = tc1.x * coeff_precision;
-		const int Bu = tc2.x * coeff_precision;
-		const int Cu = tc3.x * coeff_precision;
-		const int Av = tc1.y * coeff_precision;
-		const int Bv = tc2.y * coeff_precision;
-		const int Cv = tc3.y * coeff_precision;
+		const int Az = v1.z * f_depth_precision;
+		const int Bz = v3.z * f_depth_precision;
+		const int Cz = v2.z * f_depth_precision;
+
+		const int Aw = v1.w  * f_coeff_precision;
+		const int Bw = v3.w  * f_coeff_precision;
+		const int Cw = v2.w  * f_coeff_precision;
+		const int Au = tc1.x * f_coeff_precision;
+		const int Bu = tc2.x * f_coeff_precision;
+		const int Cu = tc3.x * f_coeff_precision;
+		const int Av = tc1.y * f_coeff_precision;
+		const int Bv = tc2.y * f_coeff_precision;
+		const int Cv = tc3.y * f_coeff_precision;
+
+		/* screenspace -> NDC space */
+		int NDC_x_step = (2.0f / (float)width) * f_ndc_precision;
+		int NDC_y_step = (2.0f / (float)height) * f_ndc_precision;
+		int NDC_x = (float)x*(2.0f / (float)width) * f_ndc_precision;
+		int NDC_y = (float)y*(2.0f / (float)height) * f_ndc_precision;
+
 		// Accept whole block when totally covered
 		if(a == 0xF && b == 0xF && c == 0xF){
-		  int co_w_by = Bw*y;
-		  int co_z_by = Bz*y;
-		  int co_u_by = Bu*y;
-		  int co_v_by = Bv*y;
 		  unsigned int col = y*width;
 		  const unsigned int* tbuf = &wc_texture0->texels[0];
 		  int iTw = wc_texture0->width;
 		  int iTh = wc_texture0->height;
+		  int NDC_iy = NDC_y; //current y, or iy in NDC space
 		  for(int iy = y; iy < y + q; iy++){
 			if(boundTest1 && ((iy < 0) || (iy >= height))){
-			  co_w_by += Bw;
-			  co_z_by += Bz;
-			  co_u_by += Bu;
-			  co_v_by += Bv;
+			  NDC_iy += NDC_y_step;
 			  col += width;
 			  continue;
 			}
-			int co_w_ax = Aw*x;
-			int co_z_ax = Az*x;
-			int co_u_ax = Au*x;
-			int co_v_ax = Av*x;
+			int NDC_ix = NDC_x;
 			for(int ix = x; ix < x + q; ix++){
 			  if(boundTest1 && ((ix < 0) || (ix >= width))){
-				co_w_ax += Aw;
-				co_z_ax += Az;
-				co_u_ax += Au;
-				co_v_ax += Av;
+				NDC_ix += NDC_x_step;
 				continue;
 			  }
-			  //int z = co_z_ax + co_z_by + Cz;
-			  //z = (z >> (coeff_precision_base - 16)) & 0xFFFF;
-			  float ndcX = (float)ix*(2.0f / (float)width) - 1.0f;
-			  float ndcY = (float)iy*(2.0f / (float)height) - 1.0f;
-			  float fZ = (v1.z*ndcX + v3.z*ndcY + v2.z);
-			  //ASSERT(fZ > 0.0f && fZ <= 1.0);
-			  unsigned short z = fZ * 65535.0f;
-			  //zmin, zmax
-			  //if(z < zmin) zmin = z;
-			  //if(z > zmax) zmax = z;
-			  if(z < wc_depthbuffer.data[ix + col]){
-				wc_depthbuffer.data[ix + col] = z;
-				int wi = co_w_ax + co_w_by + Cw;
-				int w = ((long long)1<<(coeff_precision_base * 2)) / wi;
-				int uw = co_u_ax + co_u_by + Cu;
-				int vw = co_v_ax + co_v_by + Cv;
+
+			  const int base_diff = (ndc_precision_base - coeff_precision_base);
+			  const int base_diff_z = (ndc_precision_base - depth_precision_base);
+
+			  int interpX = (NDC_ix - i_ndc_precision) >> base_diff;
+			  int interpY = (NDC_iy - i_ndc_precision) >> base_diff;
+			  int interpZX = (NDC_ix - i_ndc_precision) >> base_diff_z;
+			  int interpZY = (NDC_iy - i_ndc_precision) >> base_diff_z;
+
+			  //maybe need to cast later
+			  unsigned short z =
+				((((long long)Az*interpZX) + ((long long)Bz*interpZY))>>depth_precision_base) + Cz;
+
+
+			  if(z < wc_depthbuffer[ix + col]){
+				wc_depthbuffer[ix + col] = z;
+				int wi = (((long long)Aw*interpX)>>coeff_precision_base) + (((long long)Bw*interpY)>>coeff_precision_base) + Cw;
+				int uw = (((long long)Au*interpX)>>coeff_precision_base) + (((long long)Bu*interpY)>>coeff_precision_base) + Cu;
+				int vw = (((long long)Av*interpX)>>coeff_precision_base) + (((long long)Bv*interpY)>>coeff_precision_base) + Cv;
+				int w = ((int)1<<(coeff_precision_base * 2)) / wi;
 				int u = ((long long)uw*w*iTw) >> (coeff_precision_base * 2);
 				int v = ((long long)vw*w*iTh) >> (coeff_precision_base * 2);
+				u = clamp((int)u, 0, iTw-1);
+				v = clamp((int)v, 0, iTh-1);
 				int idxTex = u + v*iTw;
 				wc_colorbuffer[ix + col] = tbuf[idxTex];
 			  }
-			  co_w_ax += Aw;
-			  co_z_ax += Az;
-			  co_u_ax += Au;
-			  co_v_ax += Av;
+			  NDC_ix += NDC_x_step;
 			}
-			co_w_by += Bw;
-			co_z_by += Bz;
-			co_u_by += Bu;
-			co_v_by += Bv;
+			NDC_iy += NDC_y_step;
 			col += width;
 		  }
 		} else { // Partially covered
+		  #if 1
 		  int CY1 = C1 + DX12 * y0 - DY12 * x0;
 		  int CY2 = C2 + DX23 * y0 - DY23 * x0;
 		  int CY3 = C3 + DX31 * y0 - DY31 * x0;
-		  int co_w_by = Bw*y;
-		  int co_z_by = Bz*y;
-		  int co_u_by = Bu*y;
-		  int co_v_by = Bv*y;
 		  unsigned int col = y*width;
 		  const unsigned int* tbuf = &wc_texture0->texels[0];
 		  int iTw = wc_texture0->width;
 		  int iTh = wc_texture0->height;
+		  int NDC_iy = NDC_y; //current y, or iy in NDC space
 		  for(int iy = y; iy < y + q; iy++){
 			if(boundTest1 && (iy < 0 || iy >= height)){
+			  NDC_iy += NDC_y_step;
 			  CY1 += FDX12;
 			  CY2 += FDX23;
 			  CY3 += FDX31;
-			  co_w_by += Bw;
-			  co_z_by += Bz;
-			  co_u_by += Bu;
-			  co_v_by += Bv;
 			  col += width;
 			  continue;
 			}
 			int CX1 = CY1;
 			int CX2 = CY2;
 			int CX3 = CY3;
-			int co_w_ax = Aw*x;
-			int co_z_ax = Az*x;
-			int co_u_ax = Au*x;
-			int co_v_ax = Av*x;
+			int NDC_ix = NDC_x;
 			for(int ix = x; ix < x + q; ix++){
 			  if(boundTest1 && (ix < 0 || ix >= width)){
-				co_w_ax += Aw;
-				co_z_ax += Az;
-				co_u_ax += Au;
-				co_v_ax += Av;
+				NDC_ix += NDC_x_step;
 				CX1 -= FDY12;
 				CX2 -= FDY23;
 				CX3 -= FDY31;
 				continue;
 			  }
 			  if(CX1 > 0 && CX2 > 0 && CX3 > 0){
-				//int z = co_z_ax + co_z_by + Cz;
-				//z = (z >> (coeff_precision_base - 16)) & 0xFFFF;
-				float ndcX = (float)ix*(2.0f / (float)width) - 1.0f;
-				float ndcY = (float)iy*(2.0f / (float)height) - 1.0f;
-				float fZ = (v1.z*ndcX + v3.z*ndcY + v2.z);
-				//ASSERT(fZ >= 0.0f && fZ <= 1.0);
-				unsigned short z = fZ * 65535.0f;
-				//zmin, zmax
-				//if(z < zmin) zmin = z;
-				//if(z > zmax) zmax = z;
-				if(z < wc_depthbuffer.data[ix + col]){
-				  wc_depthbuffer.data[ix + col] = z;
-				  int wi = co_w_ax + co_w_by + Cw;
-				  int w = ((long long)1<<(coeff_precision_base * 2)) / wi;
-				  int uw = co_u_ax + co_u_by + Cu;
-				  int vw = co_v_ax + co_v_by + Cv;
+
+				const int base_diff = (ndc_precision_base - coeff_precision_base);
+				const int base_diff_z = (ndc_precision_base - depth_precision_base);
+
+				int interpX = (NDC_ix - i_ndc_precision) >> base_diff;
+				int interpY = (NDC_iy - i_ndc_precision) >> base_diff;
+				int interpZX = (NDC_ix - i_ndc_precision) >> base_diff_z;
+				int interpZY = (NDC_iy - i_ndc_precision) >> base_diff_z;
+
+				//maybe need to cast later
+				unsigned short z =
+				(((Az*interpZX) + (Bz*interpZY))>>depth_precision_base) + Cz;
+
+				if(z < wc_depthbuffer[ix + col]){
+				  wc_depthbuffer[ix + col] = z;
+
+				  int wi = (((long long)Aw*interpX)>>coeff_precision_base) + (((long long)Bw*interpY)>>coeff_precision_base) + Cw;
+				  int uw = (((long long)Au*interpX)>>coeff_precision_base) + (((long long)Bu*interpY)>>coeff_precision_base) + Cu;
+				  int vw = (((long long)Av*interpX)>>coeff_precision_base) + (((long long)Bv*interpY)>>coeff_precision_base) + Cv;
+				  int w = ((int)1<<(coeff_precision_base * 2)) / wi;
 				  int u = ((long long)uw*w*iTw) >> (coeff_precision_base * 2);
 				  int v = ((long long)vw*w*iTh) >> (coeff_precision_base * 2);
+				  u = clamp((int)u, 0, iTw-1);
+				  v = clamp((int)v, 0, iTh-1);
 				  int idxTex = u + v*iTw;
 				  wc_colorbuffer[ix + col] = tbuf[idxTex];
-				}
+				}				
 			  }
-			  co_w_ax += Aw;
-			  co_z_ax += Az;
-			  co_u_ax += Au;
-			  co_v_ax += Av;
+			  NDC_ix += NDC_x_step;
 			  CX1 -= FDY12;
 			  CX2 -= FDY23;
 			  CX3 -= FDY31;
 			}
-			co_w_by += Bw;
-			co_z_by += Bz;
-			co_u_by += Bu;
-			co_v_by += Bv;
-			col += width;
+			NDC_iy += NDC_y_step;
 			CY1 += FDX12;
 			CY2 += FDX23;
 			CY3 += FDX31;
+			col += width;
 		  }
+		#endif
 		}
 	  }
 	}
@@ -405,12 +397,16 @@ inline static void SR_InterpTransform(float& f1, float& f2, float& f3, const Mat
   /* Multiply by coefficient matrix */
   v = m * v;
   /* Assign the transformed values back */
-  float width = wc_colorbuffer.w;
-  float height = wc_colorbuffer.h;
+  //float width = wc_colorbuffer.w;
+  //float height = wc_colorbuffer.h;
 
-  f1 = v.x*(2.0f / width);
-  f2 = v.y*(2.0f / height);
-  f3 = v.z - v.x - v.y;
+  //f1 = v.x*(2.0f / width);
+  //f2 = v.y*(2.0f / height);
+  //f3 = v.z - v.x - v.y;
+
+  f1 = v.x;
+  f2 = v.y;
+  f3 = v.z;
 }
 
 inline static void SR_InterpTransform(Vector4f& v1, Vector4f& v2, Vector4f& v3, const Matrix3f& m)

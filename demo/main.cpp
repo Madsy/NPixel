@@ -21,7 +21,7 @@ struct Mesh
 
 //float time_elapsed = 8.472656f;
 unsigned int printAccum = 0;
-const int NUM_MESHES = 10;
+const int NUM_MESHES = 20;
 
 static void loop(void* data)
 {
@@ -81,14 +81,16 @@ int main(int argc, char* argv[])
 {
   (void)argc;
   (void)argv;
-  const int width = 640;
-  const int height = 360;
+  const int width = 800;
+  const int height = 600;
   const int depth = 32;
   Mesh mesh[NUM_MESHES];
 
+  srand(time(NULL));
+
   for(int i = 0; i < NUM_MESHES; ++i){
 	mesh[i].rotationSpeed = rnd_min_max(0.0f, 0.25f);
-	mesh[i].position = Vector4f(rnd_min_max(-1.0f, 1.0f), rnd_min_max(-1.0f, 1.0f), rnd_min_max(-2.5f, -8.0), 1.0f);
+	mesh[i].position = Vector4f(rnd_min_max(-1.0f, 1.0f), rnd_min_max(-1.0f, 1.0f), rnd_min_max(-2.5f, -30.0), 1.0f);
   }
   SR_Init(width, height);
   SR_SetCaption("Tile-Rasterizer Test");
@@ -96,7 +98,7 @@ int main(int argc, char* argv[])
   const Texture* tex = ReadPNG("texture0.png");
   SR_BindTexture0(tex);
 
-  Matrix4f clipMatrix = perspective(60.0f, (float)width/(float)height, 1.0f, 10.0f);
+  Matrix4f clipMatrix = perspective(60.0f, (float)width/(float)height, 1.0f, 40.0f);
   SR_SetProjectionMatrix(clipMatrix);
 
   for(int i=0; i<NUM_MESHES; ++i)

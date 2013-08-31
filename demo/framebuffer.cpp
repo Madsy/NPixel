@@ -16,7 +16,7 @@ void SR_ClearBuffer(unsigned int type)
 {
   if(type & SR_COLOR_BUFFER)
 	std::fill(wc_colorbuffer.data.begin(),
-			  wc_colorbuffer.data.end(), 0);
+			  wc_colorbuffer.data.end(), 0xFFFFFFFF);
   if(type & SR_DEPTH_BUFFER)
 	std::fill(wc_depthbuffer.data.begin(),
 			  wc_depthbuffer.data.end(), 65535);
