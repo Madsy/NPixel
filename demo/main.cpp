@@ -80,12 +80,12 @@ int main(int argc, char* argv[])
 {
   (void)argc;
   (void)argv;
-  const int width = 640;
-  const int height = 480;
+  const int width = 1280;
+  const int height = 720;
   const int depth = 32;
   Mesh mesh[NUM_MESHES];
 
-  srand(time(NULL));
+  //srand(time(NULL));
 
   for(int i = 0; i < NUM_MESHES; ++i){
 	mesh[i].rotationSpeed = rnd_min_max(0.0f, 0.25f);

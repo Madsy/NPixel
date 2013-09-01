@@ -10,8 +10,8 @@ template<typename T> struct Buffer2D
 	  data.resize(width*height);
 	}
     Buffer2D() : w(0), h(0), data(){}
-    T& operator[](size_t index){ return data[index]; }
-    const T& operator[](size_t index) const { return data[index]; }
+    inline T& operator[](size_t index){ return data[index]; }
+    inline const T& operator[](size_t index) const { return data[index]; }
 
     unsigned int w;
     unsigned int h;

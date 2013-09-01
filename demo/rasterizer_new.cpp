@@ -13,6 +13,9 @@
 #include "myassert.h"
 #include "shaders.h"
 
+
+//#define PASSMODE //Fill-color blit-loop for testing
+
 inline int iround(float f)
 {
   int r;
@@ -35,9 +38,7 @@ inline int fpceil10(int fp)
   return (fp & 1023) ? ((fp & ~1023) + 1024) : fp;
 }
 
-//int zmin, zmax;
-
-template<class T> void DrawTriangles(T fs)
+void DrawTriangles(unsigned int flags)
 {
   using std::min;
   using std::max;
@@ -91,7 +92,7 @@ template<class T> void DrawTriangles(T fs)
 	int maxy = (max(Y1, max(Y2, Y3)) + 0xF) >> 4;
 
 	// Block size, standard 8x8 (must be power of two)
-	const int Q = 3;
+	const int Q = 4;
 	const int q = (1<<Q);
 
 	// Start in corner of 8x8 block
@@ -141,14 +142,15 @@ template<class T> void DrawTriangles(T fs)
 		int pflags1 = (py0min << 3) | (py1min << 2) | (py0max << 1) | py1max;
 		
 		if(pflags0 == 0xF && pflags1 == 0xF){
-		  //Completely inside the frustum
+		  //Completely inside the frustum, use
+		  //boundTest1 to early-out from scissoring later
 		  boundTest1 = false;
 		} else if(pflags0 == 0x3 || pflags0 == 0xC ||
 				  pflags1 == 0x3 || pflags1 == 0xC){
-		  // pflags0 == 0x3: outside right X plane
-		  // pflags0 == 0xC: outside left X plane
-		  // pflags1 == 0x3: outside bottom Y plane
-		  // pflags1 == 0xC: outside top Y plane
+		  // pflags0 == 0x3: tile outside right X plane
+		  // pflags0 == 0xC: tile outside left X plane
+		  // pflags1 == 0x3: tile outside bottom Y plane
+		  // pflags1 == 0xC: tile outside top Y plane
 		  continue;
 		} else {
 		  boundTest1 = true;
@@ -184,18 +186,25 @@ template<class T> void DrawTriangles(T fs)
 		// Skip block when outside an edge
 		if(a == 0x0 || b == 0x0 || c == 0x0) continue;
 
+		//Fixedpoint base for coefficients
 		const int coeff_precision_base = 11;
+		//Fixedpoint base for NDC coordinates (we convert screen-space coords to NDCs later)
 		const int ndc_precision_base = 20;
+		//Need 16-bits precision for z-buffer
 		const int depth_precision_base = 16;
+		//The actual scalars for the bases above (precision = 1 << base)
 		const float f_coeff_precision = (float)(1 << coeff_precision_base);
 		const float f_ndc_precision = (float)(1 << ndc_precision_base);
 		const float f_depth_precision = (float)(1 << depth_precision_base);
 		const int i_coeff_precision = 1 << coeff_precision_base;
 		const int i_ndc_precision = 1 << ndc_precision_base;
 		const int i_depth_precision = 1 << depth_precision_base;
+		//Base to use when converting from NDC coordinates to coefficients
 		const int base_diff = (ndc_precision_base - coeff_precision_base);
+		//Base to use when converting from NDC coordinates to depth
 		const int base_diff_z = (ndc_precision_base - depth_precision_base);
-		/* s = Ax + By + C */
+		// Coefficients for the equation s/w = Ax + By + C
+		// Where x and y are in NDC space
 		const int Az = v1.z * f_depth_precision;
 		const int Bz = v3.z * f_depth_precision;
 		const int Cz = v2.z * f_depth_precision;
@@ -214,27 +223,36 @@ template<class T> void DrawTriangles(T fs)
 		const float fHalfHeightInv = 2.0f / (float)height;
 
 		// screenspace -> NDC space
-		int NDC_x_step = fHalfWidthInv * f_ndc_precision;
-		int NDC_y_step = fHalfHeightInv * f_ndc_precision;
-		int NDC_x0 = x * NDC_x_step;  //halfWidthInv * f_ndc_precision;
-		int NDC_y0 = y * NDC_y_step; //halfHeighthInv * f_ndc_precision;
-		int NDC_x1 = (x + q - 1) * NDC_x_step;
-		int NDC_y1 = (y + q - 1) * NDC_y_step;
+		// Since ScreenX = NdcX * halfWidth + halfWidth, then
+		// NdcX = (ScreenX - halfWidth) / halfWidth, which can be rewritten as
+		// NdcX = (ScreenX * (2 / width)) - 1
+		// We can't interpolate the subtraction of 1, so that's
+		// done later.
+		int NDC_x_step = fHalfWidthInv * f_ndc_precision; //1 subtracted later
+		int NDC_y_step = fHalfHeightInv * f_ndc_precision; //1 subtracted later
+		//NDCs for the corners of the tile (but subtraction 1 is done later)
+		int NDC_x0 = x * NDC_x_step;  //min x
+		int NDC_y0 = y * NDC_y_step;  //min y
+		int NDC_x1 = (x + q - 1) * NDC_x_step; //max x
+		int NDC_y1 = (y + q - 1) * NDC_y_step; //max y
 
-		//compute 1/w for corner points here
+		//bwxN are actual NDCs, with 1 subtracted
 		int bwx0 = (NDC_x0 - i_ndc_precision) >> base_diff;
 		int bwx1 = (NDC_x1 - i_ndc_precision) >> base_diff;
 		int bwy0 = (NDC_y0 - i_ndc_precision) >> base_diff;
 		int bwy1 = (NDC_y1 - i_ndc_precision) >> base_diff;
 
-		int bwi0 = (((long long)Aw*bwx0)>>coeff_precision_base) + (((long long)Bw*bwy0)>>coeff_precision_base) + Cw; //left
-		int bwi1 = (((long long)Aw*bwx0)>>coeff_precision_base) + (((long long)Bw*bwy1)>>coeff_precision_base) + Cw; //left
-		int bwi2 = (((long long)Aw*bwx1)>>coeff_precision_base) + (((long long)Bw*bwy0)>>coeff_precision_base) + Cw; //right		
-		int bwi3 = (((long long)Aw*bwx1)>>coeff_precision_base) + (((long long)Bw*bwy1)>>coeff_precision_base) + Cw; //right
+		//Compute 1/w for the corners of the tile
+		//We'll linearly interpolate w over the tile to save on expensive divisions
+		int bwi0 = (((long long)Aw*bwx0)>>coeff_precision_base) + (((long long)Bw*bwy0)>>coeff_precision_base) + Cw; //top left
+		int bwi1 = (((long long)Aw*bwx0)>>coeff_precision_base) + (((long long)Bw*bwy1)>>coeff_precision_base) + Cw; //bottom left
+		int bwi2 = (((long long)Aw*bwx1)>>coeff_precision_base) + (((long long)Bw*bwy0)>>coeff_precision_base) + Cw; //top right		
+		int bwi3 = (((long long)Aw*bwx1)>>coeff_precision_base) + (((long long)Bw*bwy1)>>coeff_precision_base) + Cw; //bottom right
 
 		int bw0, bw1, bw2, bw3;
 		bw0 = bw1 = bw2 = bw3 = 0;
-
+		
+		/* bw0, bw1 .. = Box W */
 		if(bwi0)
 		  bw0 = ((int)1<<(coeff_precision_base * 2)) / bwi0;
 		if(bwi1)
@@ -243,7 +261,24 @@ template<class T> void DrawTriangles(T fs)
 		  bw2 = ((int)1<<(coeff_precision_base * 2)) / bwi2;
 		if(bwi3)
 		  bw3 = ((int)1<<(coeff_precision_base * 2)) / bwi3;
-
+		
+		/*
+		if(bwi0)
+		  bw0 = reci11(bwi0);
+		if(bwi1)
+		  bw1 = reci11(bwi1);
+		if(bwi2)
+		  bw2 = reci11(bwi2);
+		if(bwi3)
+		  bw3 = reci11(bwi3);
+		*/
+		
+		// Delta *and* slope. Since we know that a tile width
+		// and height equals a constant power of two (which is constant q), we can use
+		// it for slope as-is without dividing by deltaY or deltaX
+		// bwSlope0 = ((bw1 - bw0) << Q) >> Q; is pointless.
+		// Instead, pretend that bwSlope is delta and slope, and is
+		// in Q fixedpoint. Accumulate it and shift down with Q later
 		int bwSlopeY0 = bw1 - bw0; //vertical slope left
 		int bwSlopeY1 = bw3 - bw2; //vertical slope right
 
@@ -255,30 +290,55 @@ template<class T> void DrawTriangles(T fs)
 		  int iTh = wc_texture0->height;
 		  int NDC_iy = NDC_y0; //current y, or iy in NDC space
 
+		  //Since bwSlopeY0 is delta and slope, we're really using
+		  //a fixedpoint base of Q, so correct the start value
+		  //bwSlopeYAccum represents the vertical interpolated w values
 		  int bwSlopeYAccum0 = bw0 << Q; //start vertical w left
 		  int bwSlopeYAccum1 = bw2 << Q; //start vertical w right
 
 		  for(int iy = y; iy < y + q; iy++){
-			/* TODO: Ensure that -iy can never be larger than the tilesize q */
+			// TODO: Ensure that -iy can never be larger than the tilesize q
+			//This scissor test will early-out if boundTest1 is false,
+			//which is the case when the whole tile is inside the frustum
 			if(boundTest1) {
 			  if(iy < 0){
 				int skip = -iy;
+				iy += skip;
+				//Advance all accumulators when skipping y columns
 				NDC_iy += (NDC_y_step * skip);
 			    bwSlopeYAccum0 += (bwSlopeY0 * skip);
 				bwSlopeYAccum1 += (bwSlopeY1 * skip);
-				col += (width * skip);
+				col += (width * skip);				
 				continue;
 			  } else if(iy >= height){
 				break;
 			  }
 			}
+			//NDC component for y
+			int interpY  = (NDC_iy - i_ndc_precision) >> base_diff;
+			//Z needs more precision, so shift this NDC y down less
+			int interpZY = (NDC_iy - i_ndc_precision) >> base_diff_z;
 			int NDC_ix = NDC_x0;
+
+			//Slope and delta for horisontal interpolation for w
+			//Same rule applies here as for bwSlopeYAccum0 and bwSlopeYAccum1
 			int bwSlopeX0 = bwSlopeYAccum1 - bwSlopeYAccum0;
+			//Since we pretend that delta and slope is the same
+			//bwSlopeXAccum0 is in Q+Q fixedpoint, so correct start value
 			int bwSlopeXAccum0 = bwSlopeYAccum0 << Q; //start horisontal w left
+
+			//(((long long)Bu*interpY)>>coeff_precision_base) + Cu;
+			//(((long long)Bv*interpY)>>coeff_precision_base) + Cv;
+			//y term for uw and vw interpolants
+			unsigned int uwConst = (((long long)Bu*interpY)>>coeff_precision_base) + Cu;
+			unsigned int vwConst = (((long long)Bv*interpY)>>coeff_precision_base) + Cv;
+
 			for(int ix = x; ix < x + q; ix++){
 			  if(boundTest1){
 				if(ix < 0){
+				  //update accumulators when skipping pixels
 				  int skip = -ix;
+				  ix += skip;
 				  NDC_ix += (NDC_x_step * skip);
 				  bwSlopeXAccum0 += (bwSlopeX0 * skip);
 				  continue;
@@ -286,23 +346,26 @@ template<class T> void DrawTriangles(T fs)
 				  break;
 				}
 			  }
-
+			  //NDC component for x. Y is computed in the y loop above
 			  int interpX  = (NDC_ix - i_ndc_precision) >> base_diff;
-			  int interpY  = (NDC_iy - i_ndc_precision) >> base_diff;
+			  //Z needs more precision, so shift it down less (to 0.16 fixedpoint)
 			  int interpZX = (NDC_ix - i_ndc_precision) >> base_diff_z;
-			  int interpZY = (NDC_iy - i_ndc_precision) >> base_diff_z;
 
 			  //maybe need to cast later
 			  unsigned short z =
 				((((long long)Az*interpZX) + ((long long)Bz*interpZY))>>depth_precision_base) + Cz;
 
-
 			  if(z < wc_depthbuffer[ix + col]){
 				wc_depthbuffer[ix + col] = z;
-				//int wi = (((long long)Aw*interpX)>>coeff_precision_base) + (((long long)Bw*interpY)>>coeff_precision_base) + Cw;
-				int uw = (((long long)Au*interpX)>>coeff_precision_base) + (((long long)Bu*interpY)>>coeff_precision_base) + Cu;
-				int vw = (((long long)Av*interpX)>>coeff_precision_base) + (((long long)Bv*interpY)>>coeff_precision_base) + Cv;
-				//int w = ((int)1<<(coeff_precision_base * 2)) / wi;
+                #ifndef PASSMODE
+				//uw = A*NDC_x + B*NDC_y + C where "B*NDC_y + C" is 
+				//calculated before the X loop
+				int uw = (((long long)Au*interpX)>>coeff_precision_base) + uwConst;
+				int vw = (((long long)Av*interpX)>>coeff_precision_base) + vwConst;
+				//The w accumulator is in 2*Q fixedpoint base
+				//Due to how we interpolated vertically in the y loop,
+				//And horisontally along x, so shift it down again to
+				//get w in "coeff_precision_base" base
 				int w = bwSlopeXAccum0>>(Q*2);
 				int u = ((long long)uw*w*iTw) >> (coeff_precision_base * 2);
 				int v = ((long long)vw*w*iTh) >> (coeff_precision_base * 2);
@@ -310,10 +373,17 @@ template<class T> void DrawTriangles(T fs)
 				v = clamp((int)v, 0, iTh-1);
 				int idxTex = u + v*iTw;
 				wc_colorbuffer[ix + col] = tbuf[idxTex];
+				#else
+				wc_colorbuffer[ix + col] = 0xFFFF0000;//tbuf[idxTex];
+				#endif
 			  }
 			  NDC_ix += NDC_x_step;
+			  //horisontally interpolated W value
 			  bwSlopeXAccum0 += bwSlopeX0;
 			}
+			//vertically interpolated W values
+			//bwSlopeXAccum0 is the result of horisontally
+			//interpolating between these two points
 			bwSlopeYAccum0 += bwSlopeY0;
 			bwSlopeYAccum1 += bwSlopeY1;
 			NDC_iy += NDC_y_step;
@@ -328,11 +398,18 @@ template<class T> void DrawTriangles(T fs)
 		  int iTw = wc_texture0->width;
 		  int iTh = wc_texture0->height;
 		  int NDC_iy = NDC_y0; //current y, or iy in NDC space
+
+		  int bwSlopeYAccum0 = bw0 << Q; //start vertical w left
+		  int bwSlopeYAccum1 = bw2 << Q; //start vertical w right
+
 		  for(int iy = y; iy < y + q; iy++){
 			if(boundTest1) {
 			  if(iy < 0){
 				int skip = -iy;
+				iy += skip;
 				NDC_iy += (NDC_y_step * skip);
+			    bwSlopeYAccum0 += (bwSlopeY0 * skip);
+				bwSlopeYAccum1 += (bwSlopeY1 * skip);
 				col += (width * skip);
 				CY1 += (FDX12 * skip);
 				CY2 += (FDX23 * skip);
@@ -346,11 +423,24 @@ template<class T> void DrawTriangles(T fs)
 			int CX2 = CY2;
 			int CX3 = CY3;
 			int NDC_ix = NDC_x0;
+			int bwSlopeX0 = bwSlopeYAccum1 - bwSlopeYAccum0;
+			int bwSlopeXAccum0 = bwSlopeYAccum0 << Q;
+
+			int interpY = (NDC_iy - i_ndc_precision) >> base_diff;
+			int interpZY = (NDC_iy - i_ndc_precision) >> base_diff_z;
+
+			//(((long long)Bu*interpY)>>coeff_precision_base) + Cu;
+			//(((long long)Bv*interpY)>>coeff_precision_base) + Cv;
+			unsigned int uwConst = (((long long)Bu*interpY)>>coeff_precision_base) + Cu;
+			unsigned int vwConst = (((long long)Bv*interpY)>>coeff_precision_base) + Cv;
+
 			for(int ix = x; ix < x + q; ix++){
 			  if(boundTest1){
 				if(ix < 0){
 				  int skip = -ix;
+				  ix += skip;
 				  NDC_ix += (NDC_x_step * skip);
+				  bwSlopeXAccum0 += (bwSlopeX0 * skip);
 				  CX1 -= (FDY12 * skip);
 				  CX2 -= (FDY23 * skip);
 				  CX3 -= (FDY31 * skip);
@@ -360,14 +450,9 @@ template<class T> void DrawTriangles(T fs)
 				}
 			  }
 			  if(CX1 > 0 && CX2 > 0 && CX3 > 0){
-
-				const int base_diff = (ndc_precision_base - coeff_precision_base);
-				const int base_diff_z = (ndc_precision_base - depth_precision_base);
-
+				
 				int interpX = (NDC_ix - i_ndc_precision) >> base_diff;
-				int interpY = (NDC_iy - i_ndc_precision) >> base_diff;
 				int interpZX = (NDC_ix - i_ndc_precision) >> base_diff_z;
-				int interpZY = (NDC_iy - i_ndc_precision) >> base_diff_z;
 
 				//maybe need to cast later
 				unsigned short z =
@@ -375,24 +460,29 @@ template<class T> void DrawTriangles(T fs)
 
 				if(z < wc_depthbuffer[ix + col]){
 				  wc_depthbuffer[ix + col] = z;
-
-				  int wi = (((long long)Aw*interpX)>>coeff_precision_base) + (((long long)Bw*interpY)>>coeff_precision_base) + Cw;
-				  int uw = (((long long)Au*interpX)>>coeff_precision_base) + (((long long)Bu*interpY)>>coeff_precision_base) + Cu;
-				  int vw = (((long long)Av*interpX)>>coeff_precision_base) + (((long long)Bv*interpY)>>coeff_precision_base) + Cv;
-				  int w = ((int)1<<(coeff_precision_base * 2)) / wi;
+                  #ifndef PASSMODE
+				  int uw = (((long long)Au*interpX)>>coeff_precision_base) + uwConst;
+				  int vw = (((long long)Av*interpX)>>coeff_precision_base) + vwConst;
+				  int w = bwSlopeXAccum0>>(Q*2);				  
 				  int u = ((long long)uw*w*iTw) >> (coeff_precision_base * 2);
 				  int v = ((long long)vw*w*iTh) >> (coeff_precision_base * 2);
 				  u = clamp((int)u, 0, iTw-1);
 				  v = clamp((int)v, 0, iTh-1);
 				  int idxTex = u + v*iTw;
 				  wc_colorbuffer[ix + col] = tbuf[idxTex];
+				  #else
+				  wc_colorbuffer[ix + col] = 0xFF0000FF;//tbuf[idxTex];
+				  #endif
 				}				
 			  }
 			  NDC_ix += NDC_x_step;
+			  bwSlopeXAccum0 += bwSlopeX0;
 			  CX1 -= FDY12;
 			  CX2 -= FDY23;
 			  CX3 -= FDY31;
 			}
+			bwSlopeYAccum0 += bwSlopeY0;
+			bwSlopeYAccum1 += bwSlopeY1;
 			NDC_iy += NDC_y_step;
 			CY1 += FDX12;
 			CY2 += FDX23;
@@ -417,10 +507,15 @@ bool ComputeCoeffMatrix(const Vector4f& v1, const Vector4f& v2, const Vector4f& 
 	m[1]*(m[5]*m[6] - m[3]*m[8]) +
 	m[2]*(m[3]*m[7] - m[4]*m[6]);
 
+  //Degenerate or really small triangles
+  //have really tiny determinants or equal
+  //zero. We don't render these.
   if(std::abs(det) < 0.0125f){
 	return false;
   }
 
+  //Triangles with negative determinants
+  //are backfaces, which don't need to be rendered
   if(det < 0.0f){
 	return false;
   }
@@ -459,12 +554,6 @@ inline static void SR_InterpTransform(float& f1, float& f2, float& f3, const Mat
   /* Multiply by coefficient matrix */
   v = m * v;
   /* Assign the transformed values back */
-  //float width = wc_colorbuffer.w;
-  //float height = wc_colorbuffer.h;
-
-  //f1 = v.x*(2.0f / width);
-  //f2 = v.y*(2.0f / height);
-  //f3 = v.z - v.x - v.y;
 
   f1 = v.x;
   f2 = v.y;
@@ -494,11 +583,12 @@ void SR_Render(unsigned int flags)
 	/* Compute [a,b,c] coefficients */
 	Matrix3f m;
 	bool b = ComputeCoeffMatrix(wc_vertices[i+0], wc_vertices[i+1], wc_vertices[i+2], m);
+	//Skip degenerate triangles, small triangles and backfaces
 	if(!b) continue;
 
 	//Project() :
 	//Compute screen space coordinates for x and y
-	//Normalize z into [0.0f, 1.0f> half-range
+	//Normalize z into [0.0f, 1.0f> half-range, Q0.16 fixedpoint
 	wc_vertices[i+0] = project(wc_vertices[i+0], wc_colorbuffer.w, wc_colorbuffer.h);
 	wc_vertices[i+1] = project(wc_vertices[i+1], wc_colorbuffer.w, wc_colorbuffer.h);
 	wc_vertices[i+2] = project(wc_vertices[i+2], wc_colorbuffer.w, wc_colorbuffer.h);
@@ -517,7 +607,7 @@ void SR_Render(unsigned int flags)
 	wc_vertices[i+2].z = zv.z;
 
 	// To get "1.0f / w", multiply the 3D Vector [1,1,1] with the coefficient matrix.
-	// We don't need w anymore after this point. It's stored as a part of the matrix.
+	// We don't need w (at the triangle vertices) anymore after this point.
 	wc_vertices[i+0].w = wc_vertices[i+1].w = wc_vertices[i+2].w = 1.0f;
 	SR_InterpTransform(wc_vertices[i+0].w, wc_vertices[i+1].w, wc_vertices[i+2].w, m);
 
@@ -538,6 +628,7 @@ void SR_Render(unsigned int flags)
 	wc_tcoords0.push_back(wc_tcoords0[i+1]);
 	wc_tcoords0.push_back(wc_tcoords0[i+2]);
   }
+  //reuse these arrays but delete the previous data copy
   wc_vertices.erase(wc_vertices.begin(), wc_vertices.begin() + oldSize);
   wc_tcoords0.erase(wc_tcoords0.begin(), wc_tcoords0.begin() + oldSize);
 
@@ -562,5 +653,6 @@ void SR_Render(unsigned int flags)
 
 	}
   }
-  DrawTriangles(fs_basic);
+  //switch not done yet, so just call the test rasterizer
+  DrawTriangles(flags);
 }

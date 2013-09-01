@@ -211,5 +211,5 @@ inline Vector4f project(const Vector4f& v, float width, float height)
 /* NEW for X86, fix gcc bug. Reci computes 1/int */
 int reci15(int val);
 int reci8(int val);
-
+int reci11(int val);
 #endif

@@ -14,6 +14,7 @@ void SR_MainLoop(void (*cb_loop)(void*),
 {
   bool running = true;
   SDL_Event event;
+  //SDL_ShowCursor(0);
   while(running){
     while(SDL_PollEvent(&event)){
       switch(event.type){
@@ -30,6 +31,7 @@ void SR_MainLoop(void (*cb_loop)(void*),
 	cb_loop(data);
   }
   cb_clean(data);
+  //  SDL_ShowCursor(1);
   SR_Quit();
 }
 

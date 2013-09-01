@@ -2,7 +2,7 @@
 #define RASTERIZER_H_GUARD
 #include <linealg.h>
 
-void DrawTriangle();
+void DrawTriangles(unsigned int flags);
 
 /* Computes coefficients for the vertex-scalars to interpolate.
    z, w, texture coordinates, normals, etc are multiplied with this matrix and later used
