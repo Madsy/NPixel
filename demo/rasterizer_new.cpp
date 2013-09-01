@@ -91,7 +91,7 @@ template<class T> void DrawTriangles(T fs)
 	int maxy = (max(Y1, max(Y2, Y3)) + 0xF) >> 4;
 
 	// Block size, standard 8x8 (must be power of two)
-	const int Q = 4;
+	const int Q = 3;
 	const int q = (1<<Q);
 
 	// Start in corner of 8x8 block
@@ -185,7 +185,7 @@ template<class T> void DrawTriangles(T fs)
 		if(a == 0x0 || b == 0x0 || c == 0x0) continue;
 
 		const int coeff_precision_base = 11;
-		const int ndc_precision_base = 30;
+		const int ndc_precision_base = 20;
 		const int depth_precision_base = 16;
 		const float f_coeff_precision = (float)(1 << coeff_precision_base);
 		const float f_ndc_precision = (float)(1 << ndc_precision_base);
@@ -269,8 +269,8 @@ template<class T> void DrawTriangles(T fs)
 		  int iTh = wc_texture0->height;
 		  int NDC_iy = NDC_y0; //current y, or iy in NDC space
 
-		  int bwSlopeYAccum0 = bw0; //start vertical w left
-		  int bwSlopeYAccum1 = bw2; //start verticalw right
+		  int bwSlopeYAccum0 = bw0 << Q; //start vertical w left
+		  int bwSlopeYAccum1 = bw2 << Q; //start vertical w right
 
 		  for(int iy = y; iy < y + q; iy++){
 			/* TODO: Ensure that -iy can never be larger than the tilesize q */
@@ -288,7 +288,7 @@ template<class T> void DrawTriangles(T fs)
 			}
 			int NDC_ix = NDC_x0;
 			int bwSlopeX0 = bwSlopeYAccum1 - bwSlopeYAccum0;
-			int bwSlopeXAccum0 = bwSlopeYAccum0; //start horisontal w left
+			int bwSlopeXAccum0 = bwSlopeYAccum0 << Q; //start horisontal w left
 			for(int ix = x; ix < x + q; ix++){
 			  if(boundTest1){
 				if(ix < 0){
@@ -317,7 +317,7 @@ template<class T> void DrawTriangles(T fs)
 				int uw = (((long long)Au*interpX)>>coeff_precision_base) + (((long long)Bu*interpY)>>coeff_precision_base) + Cu;
 				int vw = (((long long)Av*interpX)>>coeff_precision_base) + (((long long)Bv*interpY)>>coeff_precision_base) + Cv;
 				//int w = ((int)1<<(coeff_precision_base * 2)) / wi;
-				int w = bwSlopeXAccum0>>Q;
+				int w = bwSlopeXAccum0>>(Q*2);
 				int u = ((long long)uw*w*iTw) >> (coeff_precision_base * 2);
 				int v = ((long long)vw*w*iTh) >> (coeff_precision_base * 2);
 				u = clamp((int)u, 0, iTw-1);
