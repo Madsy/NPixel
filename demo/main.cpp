@@ -21,7 +21,7 @@ struct Mesh
 
 //float time_elapsed = 8.472656f;
 unsigned int printAccum = 0;
-const int NUM_MESHES = 20;
+const int NUM_MESHES = 100;
 
 static void loop(void* data)
 {
@@ -59,9 +59,8 @@ static void loop(void* data)
   float t2 = (float)SDL_GetTicks() * 0.001f;
   float tdiff = t2 - time_elapsed;
   if(tdiff != 0.0f) tdiff = 1.0f / tdiff;
-  if(printAccum == 0xFF){
+  if(printAccum == 63){
 	printf("fps: %f\n", tdiff);
-	//printf("zmin: %d, zmax: %d\n", zmin, zmax);
 	printAccum = 0;
   }
   printAccum++;
@@ -81,8 +80,8 @@ int main(int argc, char* argv[])
 {
   (void)argc;
   (void)argv;
-  const int width = 800;
-  const int height = 600;
+  const int width = 640;
+  const int height = 480;
   const int depth = 32;
   Mesh mesh[NUM_MESHES];
 

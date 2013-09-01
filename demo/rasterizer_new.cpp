@@ -91,7 +91,8 @@ template<class T> void DrawTriangles(T fs)
 	int maxy = (max(Y1, max(Y2, Y3)) + 0xF) >> 4;
 
 	// Block size, standard 8x8 (must be power of two)
-	const int q = 8;
+	const int Q = 4;
+	const int q = (1<<Q);
 
 	// Start in corner of 8x8 block
 	minx &= ~(q - 1);
@@ -125,7 +126,7 @@ template<class T> void DrawTriangles(T fs)
 
 		// test block against x and y frustum planes
 		bool boundTest1 = true;
-		/*
+		
 		bool px0min = x0 > 0;
 		bool px0max = x0 < width;
 		bool py0min = y0 > 0;
@@ -152,7 +153,7 @@ template<class T> void DrawTriangles(T fs)
 		} else {
 		  boundTest1 = true;
 		}
-		*/
+		
 		x0 <<= 4;
 		x1 <<= 4;
 		y0 <<= 4;
@@ -192,7 +193,8 @@ template<class T> void DrawTriangles(T fs)
 		const int i_coeff_precision = 1 << coeff_precision_base;
 		const int i_ndc_precision = 1 << ndc_precision_base;
 		const int i_depth_precision = 1 << depth_precision_base;
-
+		const int base_diff = (ndc_precision_base - coeff_precision_base);
+		const int base_diff_z = (ndc_precision_base - depth_precision_base);
 		/* s = Ax + By + C */
 		const int Az = v1.z * f_depth_precision;
 		const int Bz = v3.z * f_depth_precision;
@@ -208,11 +210,56 @@ template<class T> void DrawTriangles(T fs)
 		const int Bv = tc2.y * f_coeff_precision;
 		const int Cv = tc3.y * f_coeff_precision;
 
-		/* screenspace -> NDC space */
-		int NDC_x_step = (2.0f / (float)width) * f_ndc_precision;
-		int NDC_y_step = (2.0f / (float)height) * f_ndc_precision;
-		int NDC_x = (float)x*(2.0f / (float)width) * f_ndc_precision;
-		int NDC_y = (float)y*(2.0f / (float)height) * f_ndc_precision;
+		const float fHalfWidthInv = 2.0f / (float)width;
+		const float fHalfHeightInv = 2.0f / (float)height;
+
+		// screenspace -> NDC space
+		int NDC_x_step = fHalfWidthInv * f_ndc_precision;
+		int NDC_y_step = fHalfHeightInv * f_ndc_precision;
+		int NDC_x0 = x * NDC_x_step;  //halfWidthInv * f_ndc_precision;
+		int NDC_y0 = y * NDC_y_step; //halfHeighthInv * f_ndc_precision;
+		int NDC_x1 = (x + q - 1) * NDC_x_step;
+		int NDC_y1 = (y + q - 1) * NDC_y_step;
+
+		//compute 1/w for corner points here
+		int bwx0 = (NDC_x0 - i_ndc_precision) >> base_diff;
+		int bwx1 = (NDC_x1 - i_ndc_precision) >> base_diff;
+		int bwy0 = (NDC_y0 - i_ndc_precision) >> base_diff;
+		int bwy1 = (NDC_y1 - i_ndc_precision) >> base_diff;
+
+		int bwi0 = (((long long)Aw*bwx0)>>coeff_precision_base) + (((long long)Bw*bwy0)>>coeff_precision_base) + Cw; //left
+		int bwi1 = (((long long)Aw*bwx0)>>coeff_precision_base) + (((long long)Bw*bwy1)>>coeff_precision_base) + Cw; //left
+		int bwi2 = (((long long)Aw*bwx1)>>coeff_precision_base) + (((long long)Bw*bwy0)>>coeff_precision_base) + Cw; //right		
+		int bwi3 = (((long long)Aw*bwx1)>>coeff_precision_base) + (((long long)Bw*bwy1)>>coeff_precision_base) + Cw; //right
+
+		int bw0, bw1, bw2, bw3;
+		int bu0, bu1, bu2, bu3;
+		int bv0, bv1, bv2, bv3;
+		bw0 = bw1 = bw2 = bw3 = 0;
+		if(bwi0)
+		  bw0 = ((int)1<<(coeff_precision_base * 2)) / bwi0;
+		if(bwi1)
+		  bw1 = ((int)1<<(coeff_precision_base * 2)) / bwi1;
+		if(bwi2)
+		  bw2 = ((int)1<<(coeff_precision_base * 2)) / bwi2;
+		if(bwi3)
+		  bw3 = ((int)1<<(coeff_precision_base * 2)) / bwi3;
+
+		//float deltaW = bw1 - bw0;
+		//float slopeWY = deltaW / 16.0f;
+		//float w = bw0 + slopeWY * iy
+		//delta = ((bw1 - bw0) << Q) / q
+		//1024/16 = 64
+		//16/1024 = 1/64 (4)(10) (64 = 10-4 = 6 = 2^6)
+		//(16*1024) / 1024 = 16 = 16/1024
+
+		//Really ((bw1 - bw0)*q) / q, so it's slope and delta
+		//delta = slope/q, so slope is in Q fixedpoint
+		//bwInterpY0 = bw0 + (bwSlopeY0*yAccum) >> Q;
+		//bwInterpY1 = bw2 + (bwSlopeY1*yAccum) >> Q;
+		//interp w along the two edges (bw0,bw1) and (bw2, bw3) in the tile
+		int bwSlopeY0 = bw1 - bw0; //vertical slope left
+		int bwSlopeY1 = bw3 - bw2; //vertical slope right
 
 		// Accept whole block when totally covered
 		if(a == 0xF && b == 0xF && c == 0xF){
@@ -220,25 +267,42 @@ template<class T> void DrawTriangles(T fs)
 		  const unsigned int* tbuf = &wc_texture0->texels[0];
 		  int iTw = wc_texture0->width;
 		  int iTh = wc_texture0->height;
-		  int NDC_iy = NDC_y; //current y, or iy in NDC space
+		  int NDC_iy = NDC_y0; //current y, or iy in NDC space
+
+		  int bwSlopeYAccum0 = bw0; //start vertical w left
+		  int bwSlopeYAccum1 = bw2; //start verticalw right
+
 		  for(int iy = y; iy < y + q; iy++){
-			if(boundTest1 && ((iy < 0) || (iy >= height))){
-			  NDC_iy += NDC_y_step;
-			  col += width;
-			  continue;
-			}
-			int NDC_ix = NDC_x;
-			for(int ix = x; ix < x + q; ix++){
-			  if(boundTest1 && ((ix < 0) || (ix >= width))){
-				NDC_ix += NDC_x_step;
+			/* TODO: Ensure that -iy can never be larger than the tilesize q */
+			if(boundTest1) {
+			  if(iy < 0){
+				int skip = -iy;
+				NDC_iy += (NDC_y_step * skip);
+			    bwSlopeYAccum0 += (bwSlopeY0 * skip);
+				bwSlopeYAccum1 += (bwSlopeY1 * skip);
+				col += (width * skip);
 				continue;
+			  } else if(iy >= height){
+				break;
+			  }
+			}
+			int NDC_ix = NDC_x0;
+			int bwSlopeX0 = bwSlopeYAccum1 - bwSlopeYAccum0;
+			int bwSlopeXAccum0 = bwSlopeYAccum0; //start horisontal w left
+			for(int ix = x; ix < x + q; ix++){
+			  if(boundTest1){
+				if(ix < 0){
+				  int skip = -ix;
+				  NDC_ix += (NDC_x_step * skip);
+				  bwSlopeXAccum0 += (bwSlopeX0 * skip);
+				  continue;
+				} else if(ix >= width){
+				  break;
+				}
 			  }
 
-			  const int base_diff = (ndc_precision_base - coeff_precision_base);
-			  const int base_diff_z = (ndc_precision_base - depth_precision_base);
-
-			  int interpX = (NDC_ix - i_ndc_precision) >> base_diff;
-			  int interpY = (NDC_iy - i_ndc_precision) >> base_diff;
+			  int interpX  = (NDC_ix - i_ndc_precision) >> base_diff;
+			  int interpY  = (NDC_iy - i_ndc_precision) >> base_diff;
 			  int interpZX = (NDC_ix - i_ndc_precision) >> base_diff_z;
 			  int interpZY = (NDC_iy - i_ndc_precision) >> base_diff_z;
 
@@ -249,10 +313,11 @@ template<class T> void DrawTriangles(T fs)
 
 			  if(z < wc_depthbuffer[ix + col]){
 				wc_depthbuffer[ix + col] = z;
-				int wi = (((long long)Aw*interpX)>>coeff_precision_base) + (((long long)Bw*interpY)>>coeff_precision_base) + Cw;
+				//int wi = (((long long)Aw*interpX)>>coeff_precision_base) + (((long long)Bw*interpY)>>coeff_precision_base) + Cw;
 				int uw = (((long long)Au*interpX)>>coeff_precision_base) + (((long long)Bu*interpY)>>coeff_precision_base) + Cu;
 				int vw = (((long long)Av*interpX)>>coeff_precision_base) + (((long long)Bv*interpY)>>coeff_precision_base) + Cv;
-				int w = ((int)1<<(coeff_precision_base * 2)) / wi;
+				//int w = ((int)1<<(coeff_precision_base * 2)) / wi;
+				int w = bwSlopeXAccum0>>Q;
 				int u = ((long long)uw*w*iTw) >> (coeff_precision_base * 2);
 				int v = ((long long)vw*w*iTh) >> (coeff_precision_base * 2);
 				u = clamp((int)u, 0, iTw-1);
@@ -261,12 +326,14 @@ template<class T> void DrawTriangles(T fs)
 				wc_colorbuffer[ix + col] = tbuf[idxTex];
 			  }
 			  NDC_ix += NDC_x_step;
+			  bwSlopeXAccum0 += bwSlopeX0;
 			}
+			bwSlopeYAccum0 += bwSlopeY0;
+			bwSlopeYAccum1 += bwSlopeY1;
 			NDC_iy += NDC_y_step;
 			col += width;
 		  }
 		} else { // Partially covered
-		  #if 1
 		  int CY1 = C1 + DX12 * y0 - DY12 * x0;
 		  int CY2 = C2 + DX23 * y0 - DY23 * x0;
 		  int CY3 = C3 + DX31 * y0 - DY31 * x0;
@@ -274,27 +341,37 @@ template<class T> void DrawTriangles(T fs)
 		  const unsigned int* tbuf = &wc_texture0->texels[0];
 		  int iTw = wc_texture0->width;
 		  int iTh = wc_texture0->height;
-		  int NDC_iy = NDC_y; //current y, or iy in NDC space
+		  int NDC_iy = NDC_y0; //current y, or iy in NDC space
 		  for(int iy = y; iy < y + q; iy++){
-			if(boundTest1 && (iy < 0 || iy >= height)){
-			  NDC_iy += NDC_y_step;
-			  CY1 += FDX12;
-			  CY2 += FDX23;
-			  CY3 += FDX31;
-			  col += width;
-			  continue;
+			if(boundTest1) {
+			  if(iy < 0){
+				int skip = -iy;
+				NDC_iy += (NDC_y_step * skip);
+				col += (width * skip);
+				CY1 += (FDX12 * skip);
+				CY2 += (FDX23 * skip);
+				CY3 += (FDX31 * skip);
+				continue;
+			  } else if(iy >= height){
+				break;
+			  }
 			}
 			int CX1 = CY1;
 			int CX2 = CY2;
 			int CX3 = CY3;
-			int NDC_ix = NDC_x;
+			int NDC_ix = NDC_x0;
 			for(int ix = x; ix < x + q; ix++){
-			  if(boundTest1 && (ix < 0 || ix >= width)){
-				NDC_ix += NDC_x_step;
-				CX1 -= FDY12;
-				CX2 -= FDY23;
-				CX3 -= FDY31;
-				continue;
+			  if(boundTest1){
+				if(ix < 0){
+				  int skip = -ix;
+				  NDC_ix += (NDC_x_step * skip);
+				  CX1 -= (FDY12 * skip);
+				  CX2 -= (FDY23 * skip);
+				  CX3 -= (FDY31 * skip);
+				  continue;
+				} else if(ix >= width){
+				  break;
+				}
 			  }
 			  if(CX1 > 0 && CX2 > 0 && CX3 > 0){
 
@@ -336,7 +413,6 @@ template<class T> void DrawTriangles(T fs)
 			CY3 += FDX31;
 			col += width;
 		  }
-		#endif
 		}
 	  }
 	}

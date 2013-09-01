@@ -29,7 +29,8 @@ void SR_Flip()
   SDL_LockSurface(s);
   unsigned int* p = static_cast<unsigned int*>(s->pixels);
 #if 1
-  std::copy(wc_colorbuffer.data.begin(), wc_colorbuffer.data.end(), p);
+  //std::copy(wc_colorbuffer.data.begin(), wc_colorbuffer.data.end(), p);
+  memcpy(p, &wc_colorbuffer.data[0], sizeof(unsigned int) * wc_colorbuffer.data.size());
 #else
   for(int y = 0; y < wc_depthbuffer.h; ++y){
 	for(int x = 0; x < wc_depthbuffer.w; ++x){
