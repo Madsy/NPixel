@@ -233,9 +233,8 @@ template<class T> void DrawTriangles(T fs)
 		int bwi3 = (((long long)Aw*bwx1)>>coeff_precision_base) + (((long long)Bw*bwy1)>>coeff_precision_base) + Cw; //right
 
 		int bw0, bw1, bw2, bw3;
-		int bu0, bu1, bu2, bu3;
-		int bv0, bv1, bv2, bv3;
 		bw0 = bw1 = bw2 = bw3 = 0;
+
 		if(bwi0)
 		  bw0 = ((int)1<<(coeff_precision_base * 2)) / bwi0;
 		if(bwi1)
@@ -245,19 +244,6 @@ template<class T> void DrawTriangles(T fs)
 		if(bwi3)
 		  bw3 = ((int)1<<(coeff_precision_base * 2)) / bwi3;
 
-		//float deltaW = bw1 - bw0;
-		//float slopeWY = deltaW / 16.0f;
-		//float w = bw0 + slopeWY * iy
-		//delta = ((bw1 - bw0) << Q) / q
-		//1024/16 = 64
-		//16/1024 = 1/64 (4)(10) (64 = 10-4 = 6 = 2^6)
-		//(16*1024) / 1024 = 16 = 16/1024
-
-		//Really ((bw1 - bw0)*q) / q, so it's slope and delta
-		//delta = slope/q, so slope is in Q fixedpoint
-		//bwInterpY0 = bw0 + (bwSlopeY0*yAccum) >> Q;
-		//bwInterpY1 = bw2 + (bwSlopeY1*yAccum) >> Q;
-		//interp w along the two edges (bw0,bw1) and (bw2, bw3) in the tile
 		int bwSlopeY0 = bw1 - bw0; //vertical slope left
 		int bwSlopeY1 = bw3 - bw2; //vertical slope right
 
