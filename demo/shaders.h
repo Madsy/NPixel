@@ -3,10 +3,9 @@
 
 #include "texture.h"
 
-struct Coeff
-{
-  float A, B, C;
-  Coeff(float a, float b, float c) : A(a), B(b), C(c){}
+struct Coeff {
+	float A, B, C;
+	Coeff(float a, float b, float c) : A(a), B(b), C(c) {}
 };
 
 /*
@@ -39,8 +38,8 @@ inline void fs_basic(unsigned int x, unsigned int y, unsigned int* pixel,
 */
 
 inline void fs_basic(unsigned int x, unsigned int y, unsigned int* pixel,
-					 const Coeff& wCoeff, const Coeff& texCoordCoeff0U, const Coeff& texCoordCoeff0V)
+                     const Coeff& wCoeff, const Coeff& texCoordCoeff0U, const Coeff& texCoordCoeff0V)
 {
-  *pixel = 0xFF00FF00;
+	*pixel = 0xFF00FF00;
 }
 #endif

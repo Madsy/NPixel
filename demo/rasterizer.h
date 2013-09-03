@@ -7,7 +7,7 @@ void DrawTriangles(unsigned int flags);
 /* Computes coefficients for the vertex-scalars to interpolate.
    z, w, texture coordinates, normals, etc are multiplied with this matrix and later used
    in DrawTriangle */
-Matrix3f ComputeCoeffMatrix(const Vector4f& v1, const Vector4f& v2, const Vector4f& v3);
+Matrix3f ComputeCoeffMatrix(const VectorPOD4f& v1, const VectorPOD4f& v2, const VectorPOD4f& v3);
 
 //extern int zmin;
 //extern int zmax;

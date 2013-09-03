@@ -14,10 +14,10 @@ struct Mesh
 
 Mesh load3dsMesh(const std::string& filename)
 {
-  Lib3dsFile* file = lib3ds_file_load(filename.c_str());
-  if(!file) return;
-  
-  /* Really a linked list via Lib3dsMesh->next, but load only the first one
-     for now.. */
-  Lib3dsMesh* mesh = file->meshes;
+	Lib3dsFile* file = lib3ds_file_load(filename.c_str());
+	if(!file) return;
+
+	/* Really a linked list via Lib3dsMesh->next, but load only the first one
+	   for now.. */
+	Lib3dsMesh* mesh = file->meshes;
 }
