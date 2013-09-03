@@ -207,6 +207,28 @@ inline Vector4f project(const Vector4f& v, float width, float height)
     return proj;
 }
 
+inline int iround(float f)
+{
+  int r;
+
+  asm volatile ("fistpl %[output]\n"
+	   : [output] "=m" (r)
+	   : [input] "t" (f)
+	   : "st(0)");
+
+  return r;
+}
+
+inline int fpceil15(int fp)
+{
+  return (fp & 32767) ? ((fp & ~32767) + 32768) : fp;
+}
+
+inline int fpceil10(int fp)
+{
+  return (fp & 1023) ? ((fp & ~1023) + 1024) : fp;
+}
+
 
 /* NEW for X86, fix gcc bug. Reci computes 1/int */
 int reci15(int val);

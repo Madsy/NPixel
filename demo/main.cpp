@@ -23,8 +23,16 @@ struct Mesh
 unsigned int printAccum = 0;
 const int NUM_MESHES = 100;
 
+Matrix4f clipMatrix;
+
+std::vector<Vector4f> vertexCopy;
+std::vector<Vector4f> tcoordCopy;
+std::vector<Vector4f> projVerts;
+std::vector<Vector4f> projTex;
+
 static void loop(void* data)
 {
+  static bool doOnce = true;
   unsigned int t = SDL_GetTicks();
   float time_elapsed = static_cast<float>(t) * 0.001f;
   Mesh* mesh = static_cast<Mesh*>(data);
@@ -40,21 +48,39 @@ static void loop(void* data)
 
   SR_ClearBuffer(SR_COLOR_BUFFER | SR_DEPTH_BUFFER);
 
-  for(int i = 0; i < NUM_MESHES; ++i){
-	float xOffset = 1.8f * std::sin(2.0f * M_PI * time_elapsed * mesh[i].rotationSpeed);
+  if(doOnce){
+	doOnce = false;
+	for(int i = 0; i < NUM_MESHES; ++i){
+	  float xOffset = 1.8f * std::sin(2.0f * M_PI * time_elapsed * mesh[i].rotationSpeed);
 	
-	Matrix4f worldMatrix =
-	  translate(Vector4f(xOffset, 0.0f, 0.0f, 1.0f)) * 
-	  translate(mesh[i].position) * 
-	  rotateX(45.0f * time_elapsed * mesh[i].rotationSpeed) *
-	  rotateY(60.0f * time_elapsed * mesh[i].rotationSpeed) *
-	  rotateZ(20.0f * time_elapsed * mesh[i].rotationSpeed);
-
-	SR_SetModelViewMatrix(worldMatrix);
-	SR_SetVertices(mesh[i].vertexData);
-	SR_SetTexCoords0(mesh[i].tcoordData);
-	SR_Render(SR_TEXCOORD0);
+	  Matrix4f worldMatrix =
+		translate(Vector4f(xOffset, 0.0f, 0.0f, 1.0f)) * 
+		translate(mesh[i].position) * 
+		rotateX(45.0f * time_elapsed * mesh[i].rotationSpeed) *
+		rotateY(60.0f * time_elapsed * mesh[i].rotationSpeed) *
+		rotateZ(20.0f * time_elapsed * mesh[i].rotationSpeed);
+	  Matrix4f modelviewProjection = clipMatrix * worldMatrix;
+	  //SR_SetModelViewMatrix(worldMatrix);
+	  //SR_SetVertices(mesh[i].vertexData);
+	  //SR_SetTexCoords0(mesh[i].tcoordData);
+	  //SR_Render(SR_TEXCOORD0);
+	  for(int j = 0; j < mesh[i].vertexData.size(); j+=3){
+		vertexCopy.push_back(modelviewProjection * mesh[i].vertexData[j + 0]);
+		vertexCopy.push_back(modelviewProjection * mesh[i].vertexData[j + 1]);
+		vertexCopy.push_back(modelviewProjection * mesh[i].vertexData[j + 2]);
+	    tcoordCopy.push_back(mesh[i].tcoordData[j + 0]);
+		tcoordCopy.push_back(mesh[i].tcoordData[j + 1]);
+		tcoordCopy.push_back(mesh[i].tcoordData[j + 2]);
+	  }
+	}
   }
+  projVerts.resize(vertexCopy.size());
+  projTex.resize(tcoordCopy.size());
+  memcpy(&projVerts[0], &vertexCopy[0], vertexCopy.size() * sizeof(Vector4f));
+  memcpy(&projTex[0], &tcoordCopy[0], tcoordCopy.size() * sizeof(Vector4f));
+  SR_SetVertices(&projVerts);
+  SR_SetTexCoords0(&projTex);
+  SR_Render(SR_TEXCOORD0);
   SR_Flip();
   float t2 = (float)SDL_GetTicks() * 0.001f;
   float tdiff = t2 - time_elapsed;
@@ -80,12 +106,13 @@ int main(int argc, char* argv[])
 {
   (void)argc;
   (void)argv;
-  const int width = 1280;
-  const int height = 720;
+  const int width = 640;
+  const int height = 480;
   const int depth = 32;
   Mesh mesh[NUM_MESHES];
 
   //srand(time(NULL));
+  clipMatrix = perspective(60.0f, (float)width/(float)height, 1.0f, 40.0f);
 
   for(int i = 0; i < NUM_MESHES; ++i){
 	mesh[i].rotationSpeed = rnd_min_max(0.0f, 0.25f);
@@ -97,8 +124,8 @@ int main(int argc, char* argv[])
   const Texture* tex = ReadPNG("texture0.png");
   SR_BindTexture0(tex);
 
-  Matrix4f clipMatrix = perspective(60.0f, (float)width/(float)height, 1.0f, 40.0f);
-  SR_SetProjectionMatrix(clipMatrix);
+  //Matrix4f clipMatrix = perspective(60.0f, (float)width/(float)height, 1.0f, 40.0f);
+  //SR_SetProjectionMatrix(clipMatrix);
 
   for(int i=0; i<NUM_MESHES; ++i)
     makeMeshCube(mesh[i].vertexData, mesh[i].tcoordData, 1.0f);

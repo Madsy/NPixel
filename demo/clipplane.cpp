@@ -17,7 +17,7 @@ void clip_triangle(Vector4f plane, unsigned int flags)
   unsigned int edge0, edge1;
   unsigned int tri;
 
-  size_t vertexListSize = wc_vertices.size();
+  size_t vertexListSize = wc_vertices->size();
 
   for(tri=0; tri<vertexListSize; tri+=3){
 	std::vector<Vector4f> polygon; /* outputted vertices */
@@ -31,25 +31,25 @@ void clip_triangle(Vector4f plane, unsigned int flags)
 		tcoord0_next, tcoord1_current, tcoord1_next, normal_current,
 		normal_next, color_current, color_next;
 
-	  point_current  = wc_vertices[edge0];
-	  point_next     = wc_vertices[edge1];
+	  point_current  = (*wc_vertices)[edge0];
+	  point_next     = (*wc_vertices)[edge1];
 
 #if 1
 	  if(flags & SR_TEXCOORD0) {
-		tcoord0_current = wc_tcoords0[edge0];
-		tcoord0_next    = wc_tcoords0[edge1];
+		tcoord0_current = (*wc_tcoords0)[edge0];
+		tcoord0_next    = (*wc_tcoords0)[edge1];
 	  }
 	  if(flags & SR_TEXCOORD1){
-		tcoord1_current = wc_tcoords1[edge0];
-		tcoord1_next    = wc_tcoords1[edge1];
+		tcoord1_current = (*wc_tcoords1)[edge0];
+		tcoord1_next    = (*wc_tcoords1)[edge1];
 	  }
 	  if(flags & SR_LIGHTING){
-		normal_current = wc_normals[edge0];
-		normal_next    = wc_normals[edge1];
+		normal_current = (*wc_normals)[edge0];
+		normal_next    = (*wc_normals)[edge1];
 	  }
 	  if(flags & SR_COLOR){
-		color_current = wc_colors[edge0];
-		color_next    = wc_colors[edge1];
+		color_current = (*wc_colors)[edge0];
+		color_next    = (*wc_colors)[edge1];
 	  }
 #endif
 
@@ -177,37 +177,37 @@ void clip_triangle(Vector4f plane, unsigned int flags)
 #endif
 	}
 
-	wc_vertices.reserve(wc_vertices.size() + (polygon.size() - vcount));
-	std::copy(polygon.begin() + vcount, polygon.end(), std::back_inserter(wc_vertices));
+	wc_vertices->reserve(wc_vertices->size() + (polygon.size() - vcount));
+	std::copy(polygon.begin() + vcount, polygon.end(), std::back_inserter(*wc_vertices));
 #if 1
 	if(flags & SR_TEXCOORD0){
-	  wc_tcoords0.reserve(wc_tcoords0.size() + (polygon_tcoords0.size() - vcount));
-	  std::copy(polygon_tcoords0.begin() + vcount, polygon_tcoords0.end(), std::back_inserter(wc_tcoords0));
+	  wc_tcoords0->reserve(wc_tcoords0->size() + (polygon_tcoords0.size() - vcount));
+	  std::copy(polygon_tcoords0.begin() + vcount, polygon_tcoords0.end(), std::back_inserter(*wc_tcoords0));
 	}
 	if(flags & SR_TEXCOORD1){
-	  wc_tcoords1.reserve(wc_tcoords1.size() + (polygon_tcoords1.size() - vcount));
-	  std::copy(polygon_tcoords1.begin() + vcount, polygon_tcoords1.end(), std::back_inserter(wc_tcoords1));
+	  wc_tcoords1->reserve(wc_tcoords1->size() + (polygon_tcoords1.size() - vcount));
+	  std::copy(polygon_tcoords1.begin() + vcount, polygon_tcoords1.end(), std::back_inserter(*wc_tcoords1));
 	}
 	if(flags & SR_LIGHTING){
-	  wc_normals.reserve(wc_normals.size() + (polygon_normals.size() - vcount));
-	  std::copy(polygon_normals.begin() + vcount, polygon_normals.end(), std::back_inserter(wc_normals));
+	  wc_normals->reserve(wc_normals->size() + (polygon_normals.size() - vcount));
+	  std::copy(polygon_normals.begin() + vcount, polygon_normals.end(), std::back_inserter(*wc_normals));
 	}
 	if(flags & SR_COLOR){
-	  wc_colors.reserve(wc_colors.size() + (polygon_colors.size() - vcount));
-	  std::copy(polygon_colors.begin() + vcount, polygon_colors.end(), std::back_inserter(wc_colors));
+	  wc_colors->reserve(wc_colors->size() + (polygon_colors.size() - vcount));
+	  std::copy(polygon_colors.begin() + vcount, polygon_colors.end(), std::back_inserter(*wc_colors));
 	}
 #endif
   }
 
-  wc_vertices.erase(wc_vertices.begin(), wc_vertices.begin() + vertexListSize);
+  wc_vertices->erase(wc_vertices->begin(), wc_vertices->begin() + vertexListSize);
 #if 1
   if(flags & SR_TEXCOORD0)
-	wc_tcoords0.erase(wc_tcoords0.begin(), wc_tcoords0.begin() + vertexListSize);
+	wc_tcoords0->erase(wc_tcoords0->begin(), wc_tcoords0->begin() + vertexListSize);
   if(flags & SR_TEXCOORD1)
-	wc_tcoords1.erase(wc_tcoords1.begin(), wc_tcoords1.begin() + vertexListSize);
+	wc_tcoords1->erase(wc_tcoords1->begin(), wc_tcoords1->begin() + vertexListSize);
   if(flags & SR_LIGHTING)
-	wc_normals.erase(wc_normals.begin(), wc_normals.begin() + vertexListSize);
+	wc_normals->erase(wc_normals->begin(), wc_normals->begin() + vertexListSize);
   if(flags & SR_COLOR)
-	wc_colors.erase(wc_colors.begin(), wc_colors.begin() + vertexListSize);
+	wc_colors->erase(wc_colors->begin(), wc_colors->begin() + vertexListSize);
 #endif
 }

@@ -15,11 +15,14 @@ void SR_InitBuffers(unsigned int width, unsigned int height)
 void SR_ClearBuffer(unsigned int type)
 {
   if(type & SR_COLOR_BUFFER)
-	std::fill(wc_colorbuffer.data.begin(),
-			  wc_colorbuffer.data.end(), 0xFFFFFFFF);
-  if(type & SR_DEPTH_BUFFER)
-	std::fill(wc_depthbuffer.data.begin(),
-			  wc_depthbuffer.data.end(), 65535);
+	//std::fill(wc_colorbuffer.data.begin(),
+	//		  wc_colorbuffer.data.end(), 0xFFFFFFFF);
+	memset(&wc_colorbuffer.data[0], 0, wc_depthbuffer.data.size() * sizeof(unsigned int));
+	if(type & SR_DEPTH_BUFFER){
+	  //std::fill(wc_depthbuffer.data.begin(),
+	  //		  wc_depthbuffer.data.end(), 65535);
+	  memset(&wc_depthbuffer.data[0], 65535, wc_depthbuffer.data.size() * sizeof(unsigned short));
+	}
   return;
 }
 

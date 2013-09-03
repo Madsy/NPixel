@@ -7,7 +7,7 @@ void makeMeshSphere(std::vector<Vector4f>& vertexData,
 					float radius)
 {
 
-  const int resolution = 16;
+  const int resolution = 100;
   const float halfPI = PI * 0.5f;
   float interp = 1.0f / (float)resolution;
   Vector4f v0,v1,v2,v3;
