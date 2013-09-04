@@ -1,25 +1,101 @@
 #ifndef BUFFER_H_GUARD
 #define BUFFER_H_GUARD
+#include <SDL/SDL.h>
 #include "myassert.h"
 #ifdef DEBUG
 #include <stdexcept>
 #endif
 
 template<typename T> struct Buffer2D {
-	Buffer2D(unsigned int width, unsigned int height) : w(width), h(height), data(width*height) {
-		data.resize(width*height);
+	Buffer2D(unsigned int width,
+	         unsigned int height,
+	         T* buf = 0,
+	         bool hw = false) :
+		isHWBuffer(hw),
+		w(width),
+		h(height) {
+		if(isHWBuffer) {
+			data = 0;
+		} else {
+			data = new T[width * height];
+			if(buf)
+				memcpy(data, buf, sizeof(T) * width * height);
+		}
 	}
-	Buffer2D() : w(0), h(0), data() {}
+
+	Buffer2D(const Buffer2D<T>& b) {
+		/*
+		if(!isHWBuffer){
+		  delete [] data;
+		  data = 0;
+		}
+		*/
+		isHWBuffer = b.isHWBuffer;
+		w = b.w;
+		h = b.h;
+
+		if(isHWBuffer)
+			data = 0;
+		else {
+			data = new T[w * h];
+			if(b.data != 0)
+				memcpy(data, b.data, w*h*sizeof(T));
+		}
+	}
+	Buffer2D<T>& operator=(const Buffer2D<T>& b) {
+		if(!isHWBuffer) {
+			delete [] data;
+			data = 0;
+		}
+		isHWBuffer = b.isHWBuffer;
+		w = b.w;
+		h = b.h;
+		if(isHWBuffer)
+			data = 0;
+		else {
+			data = new T[w * h];
+			if(b.data != 0)
+				memcpy(data, b.data, w*h*sizeof(T));
+		}
+		return *this;
+	}
+	Buffer2D() : isHWBuffer(false), w(0), h(0), data(0) {
+		printf("Creating default buffer\n");
+	}
+	~Buffer2D() {
+		if(!isHWBuffer) {
+			delete[] data;
+		}
+		data = 0;
+	}
 	inline T& operator[](size_t index) {
 		return data[index];
 	}
+
 	inline const T& operator[](size_t index) const {
 		return data[index];
 	}
-
+	T* Lock() {
+		if(isHWBuffer) {
+			SDL_Surface* s = SDL_GetVideoSurface();
+			SDL_LockSurface(s);
+			return (T*)s->pixels;
+		}
+		return data;
+	}
+	void Unlock() {
+		if(isHWBuffer) {
+			SDL_Surface* s = SDL_GetVideoSurface();
+			SDL_UnlockSurface(s);
+		}
+	}
+	T* Ptr() {
+		return data;
+	}
+	bool isHWBuffer;
 	unsigned int w;
 	unsigned int h;
-	std::vector<T> data;
+	T* data;
 };
 
 template<typename T>
@@ -27,6 +103,9 @@ class Buffer1D {
 public:
 	Buffer1D(unsigned int capacity) : elemt_size(0), alloc_size(capacity), data(new T[capacity]) {}
 	Buffer1D() : elemt_size(0), alloc_size(0), data(0) {}
+	~Buffer1D() {
+		delete[] data;
+	}
 	inline T& operator[](size_t index) {
 #ifdef DEBUG
 		if(index >= elemt_size) {

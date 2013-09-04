@@ -71,6 +71,10 @@ void DrawTriangles(unsigned int flags)
 {
 	using std::min;
 	using std::max;
+	unsigned int* colorbuffer = wc_colorbuffer->Lock();
+	unsigned short* depthbuffer = wc_depthbuffer->Ptr();
+	const unsigned int width = wc_colorbuffer->w;
+	const unsigned int height = wc_colorbuffer->h;
 
 	for(int i=0; i<wc_vertices->size(); i+=3) {
 		VectorPOD4f& v1 = (*wc_vertices)[i+0];
@@ -116,9 +120,6 @@ void DrawTriangles(unsigned int flags)
 		miny &= ~(q - 1);
 		maxx = (maxx + (q - 1)) & ~(q - 1);
 		maxy = (maxy + (q - 1)) & ~(q - 1);
-
-		unsigned int width = wc_colorbuffer.w;
-		unsigned int height = wc_colorbuffer.h;
 
 		// Half-edge constants
 		int C1 = DY12 * X1 - DX12 * Y1;
@@ -308,8 +309,8 @@ void DrawTriangles(unsigned int flags)
 
 						for(int ix = x; ix < x + q; ix++) {
 							unsigned short z = bzSlopeXAccum0 >> (Q*2);
-							if(z < wc_depthbuffer[ix + col]) {
-								wc_depthbuffer[ix + col] = z;
+							if(z < depthbuffer[ix + col]) {
+								depthbuffer[ix + col] = z;
 #ifndef PASSMODE
 								int uw = buSlopeXAccum0>>(Q*2);
 								int vw = bvSlopeXAccum0>>(Q*2);
@@ -319,9 +320,9 @@ void DrawTriangles(unsigned int flags)
 								u = clamp((int)u, 0, iTw-1);
 								v = clamp((int)v, 0, iTh-1);
 								int idxTex = u + v*iTw;
-								wc_colorbuffer[ix + col] = tbuf[idxTex];
+								colorbuffer[ix + col] = tbuf[idxTex];
 #else
-								wc_colorbuffer[ix + col] = 0xFFFF0000;//tbuf[idxTex];
+								colorbuffer[ix + col] = 0xFFFF0000;//tbuf[idxTex];
 #endif
 							}
 							bwSlopeXAccum0 += bwSlopeX0;
@@ -375,8 +376,8 @@ void DrawTriangles(unsigned int flags)
 						for(int ix = x; ix < x + q; ix++) {
 							if(CX1 > 0 && CX2 > 0 && CX3 > 0) {
 								unsigned short z = bzSlopeXAccum0 >> (Q*2);
-								if(z < wc_depthbuffer[ix + col]) {
-									wc_depthbuffer[ix + col] = z;
+								if(z < depthbuffer[ix + col]) {
+									depthbuffer[ix + col] = z;
 #ifndef PASSMODE
 									int uw = buSlopeXAccum0>>(Q*2);
 									int vw = bvSlopeXAccum0>>(Q*2);
@@ -386,9 +387,9 @@ void DrawTriangles(unsigned int flags)
 									u = clamp((int)u, 0, iTw-1);
 									v = clamp((int)v, 0, iTh-1);
 									int idxTex = u + v*iTw;
-									wc_colorbuffer[ix + col] = tbuf[idxTex];
+									colorbuffer[ix + col] = tbuf[idxTex];
 #else
-									wc_colorbuffer[ix + col] = 0xFF0000FF;//tbuf[idxTex];
+									colorbuffer[ix + col] = 0xFF0000FF;//tbuf[idxTex];
 #endif
 								}
 							}
@@ -417,12 +418,15 @@ void DrawTriangles(unsigned int flags)
 			}
 		}
 	}
+	wc_colorbuffer->Unlock();
 }
 
 void BlitTilesFilled()
 {
-	const unsigned int width = wc_colorbuffer.w;
-	const unsigned int height = wc_colorbuffer.h;
+	unsigned int* colorbuffer = wc_colorbuffer->Lock();
+	unsigned short* depthbuffer = wc_depthbuffer->Ptr();
+	const unsigned int width = wc_colorbuffer->w;
+	const unsigned int height = wc_colorbuffer->h;
 	const unsigned int numTilesX = (width >> Q);
 	const unsigned int numTilesY = (height >> Q);
 	const int iTw = wc_texture0->width;
@@ -501,7 +505,7 @@ void BlitTilesFilled()
 					if(skipZTest) {
 						for(int ix = x; ix < x+q; ++ix) {
 							unsigned short z = bzSlopeXAccum0 >> (Q*2);
-							wc_depthbuffer[fbIndex] = z;
+							depthbuffer[fbIndex] = z;
 							int uw = buSlopeXAccum0>>(Q*2);
 							int vw = bvSlopeXAccum0>>(Q*2);
 							int w = bwSlopeXAccum0>>(Q*2);
@@ -510,7 +514,7 @@ void BlitTilesFilled()
 							u = clamp((int)u, 0, iTw-1);
 							v = clamp((int)v, 0, iTh-1);
 							int idxTex = u + v*iTw;
-							wc_colorbuffer[fbIndex] = tbuf[idxTex];
+							colorbuffer[fbIndex] = tbuf[idxTex];
 							++fbIndex;
 							bwSlopeXAccum0 += bwSlopeX0;
 							bzSlopeXAccum0 += bzSlopeX0;
@@ -520,8 +524,8 @@ void BlitTilesFilled()
 					} else {
 						for(int ix = x; ix < x+q; ++ix) {
 							unsigned short z = bzSlopeXAccum0 >> (Q*2);
-							if(z < wc_depthbuffer[fbIndex]) {
-								wc_depthbuffer[fbIndex] = z;
+							if(z < depthbuffer[fbIndex]) {
+								depthbuffer[fbIndex] = z;
 								int uw = buSlopeXAccum0>>(Q*2);
 								int vw = bvSlopeXAccum0>>(Q*2);
 								int w = bwSlopeXAccum0>>(Q*2);
@@ -530,7 +534,7 @@ void BlitTilesFilled()
 								u = clamp((int)u, 0, iTw-1);
 								v = clamp((int)v, 0, iTh-1);
 								int idxTex = u + v*iTw;
-								wc_colorbuffer[fbIndex] = tbuf[idxTex];
+								colorbuffer[fbIndex] = tbuf[idxTex];
 							}
 							++fbIndex;
 							bwSlopeXAccum0 += bwSlopeX0;
@@ -552,12 +556,15 @@ void BlitTilesFilled()
 			}
 		}
 	}
+	wc_colorbuffer->Unlock();
 }
 
 void BlitTiles()
 {
-	const unsigned int width = wc_colorbuffer.w;
-	const unsigned int height = wc_colorbuffer.h;
+	unsigned int* colorbuffer = wc_colorbuffer->Lock();
+	unsigned short* depthbuffer = wc_depthbuffer->Ptr();
+	const unsigned int width = wc_colorbuffer->w;
+	const unsigned int height = wc_colorbuffer->h;
 	const unsigned int numTilesX = (width >> Q);
 	const unsigned int numTilesY = (height >> Q);
 	const int iTw = wc_texture0->width;
@@ -618,8 +625,8 @@ void BlitTiles()
 					for(int ix = x; ix < x+q; ++ix) {
 						if(CX1 > 0 && CX2 > 0 && CX3 > 0) {
 							unsigned short z = bzSlopeXAccum0 >> (Q*2);
-							if(z < wc_depthbuffer[fbIndex]) {
-								wc_depthbuffer[fbIndex] = z;
+							if(z < depthbuffer[fbIndex]) {
+								depthbuffer[fbIndex] = z;
 								int uw = buSlopeXAccum0>>(Q*2);
 								int vw = bvSlopeXAccum0>>(Q*2);
 								int w = bwSlopeXAccum0>>(Q*2);
@@ -628,7 +635,7 @@ void BlitTiles()
 								u = clamp((int)u, 0, iTw-1);
 								v = clamp((int)v, 0, iTh-1);
 								int idxTex = u + v*iTw;
-								wc_colorbuffer[fbIndex] = tbuf[idxTex];
+								colorbuffer[fbIndex] = tbuf[idxTex];
 							}
 						}
 						++fbIndex;
@@ -656,6 +663,7 @@ void BlitTiles()
 			}
 		}
 	}
+	wc_colorbuffer->Unlock();
 }
 
 void DrawTrianglesDeferred(unsigned int flags)
@@ -663,8 +671,8 @@ void DrawTrianglesDeferred(unsigned int flags)
 	using std::min;
 	using std::max;
 
-	const unsigned int width = wc_colorbuffer.w;
-	const unsigned int height = wc_colorbuffer.h;
+	const unsigned int width = wc_colorbuffer->w;
+	const unsigned int height = wc_colorbuffer->h;
 	const unsigned int numTilesX = (width >> Q);
 	const unsigned int numTilesY = (height >> Q);
 	const float fHalfWidthInv = 2.0f / (float)width;
@@ -1010,17 +1018,18 @@ inline static void SR_InterpTransform(VectorPOD4f& v1, VectorPOD4f& v2, VectorPO
 void SR_Render(unsigned int flags)
 {
 	size_t oldSize = wc_vertices->size();
-	//Matrix4f modelviewProjection = wc_projection * wc_modelview;
+	wc_vertices->reserve(oldSize * 2);
 	//Do the projection matrix multiply in main() instead, so we can make
 	//a big batch of triangles instead of many few.
 	/*
+	Matrix4f modelviewProjection = wc_projection * wc_modelview;
 	for(int i = 0; i < oldSize; i+=3){
 	  (*wc_vertices)[i+0] = modelviewProjection * (*wc_vertices)[i+0];
 	  (*wc_vertices)[i+1] = modelviewProjection * (*wc_vertices)[i+1];
 	  (*wc_vertices)[i+2] = modelviewProjection * (*wc_vertices)[i+2];
 	}
 	*/
-	wc_vertices->reserve(oldSize * 2);
+
 	for(int i = 0; i < oldSize; i+=3) {
 		/* Compute [a,b,c] coefficients */
 		MatrixPOD3f m;
@@ -1031,9 +1040,9 @@ void SR_Render(unsigned int flags)
 		//Project() :
 		//Compute screen space coordinates for x and y
 		//Normalize z into [0.0f, 1.0f> half-range, Q0.16 fixedpoint
-		(*wc_vertices)[i+0] = project((*wc_vertices)[i+0], wc_colorbuffer.w, wc_colorbuffer.h);
-		(*wc_vertices)[i+1] = project((*wc_vertices)[i+1], wc_colorbuffer.w, wc_colorbuffer.h);
-		(*wc_vertices)[i+2] = project((*wc_vertices)[i+2], wc_colorbuffer.w, wc_colorbuffer.h);
+		(*wc_vertices)[i+0] = project((*wc_vertices)[i+0], wc_colorbuffer->w, wc_colorbuffer->h);
+		(*wc_vertices)[i+1] = project((*wc_vertices)[i+1], wc_colorbuffer->w, wc_colorbuffer->h);
+		(*wc_vertices)[i+2] = project((*wc_vertices)[i+2], wc_colorbuffer->w, wc_colorbuffer->h);
 
 		//Must interpolate z linearly in screenspace!
 		//To get the coefficients required for an affine interpolation, simply multiply z with w

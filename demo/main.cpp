@@ -10,7 +10,7 @@
 #include "texture.h"
 #include "myassert.h"
 #include "misc.h"
-
+#define DEBUG
 struct Mesh {
 	std::vector<VectorPOD4f> vertexData; // Our original mesh
 	std::vector<VectorPOD4f> tcoordData; // Our original mesh
@@ -46,37 +46,7 @@ static void loop(void* data)
 	SR_ClearBuffer(SR_COLOR_BUFFER | SR_DEPTH_BUFFER);
 
 	float rt = time_elapsed;
-	/*
-	if(doOnce){
-	doOnce = false;
-	for(int i = 0; i < NUM_MESHES; ++i){
-	  float xOffset = 1.8f * std::sin(2.0f * M_PI * rt * mesh[i].rotationSpeed);
-	  VectorPOD4f offsetVec = {xOffset, 0.0f, 0.0f, 1.0f};
 
-	  MatrixPOD4f trans0, trans1, rotX, rotY, rotZ, worldMatrix, modelviewProjection;
-	  translate(trans0, offsetVec);
-	  translate(trans1, mesh[i].position);
-	  rotateX(rotX, 45.0f * rt * mesh[i].rotationSpeed);
-	  rotateY(rotY, 60.0f * rt * mesh[i].rotationSpeed);
-	  rotateZ(rotZ, 20.0f * rt * mesh[i].rotationSpeed);
-	  Mat4Mat4Mul(worldMatrix, rotY, rotZ);
-	  Mat4Mat4Mul(worldMatrix, rotX, worldMatrix);
-	  Mat4Mat4Mul(worldMatrix, trans1, worldMatrix);
-	  Mat4Mat4Mul(worldMatrix, trans0, worldMatrix);
-	  Mat4Mat4Mul(modelviewProjection, clipMatrix, worldMatrix);
-
-	  for(int j = 0; j < mesh[i].vertexData.size(); j+=3){
-		vertexCopy.push_back(Mat4Vec4Mul(modelviewProjection, mesh[i].vertexData[j + 0]));
-		vertexCopy.push_back(Mat4Vec4Mul(modelviewProjection, mesh[i].vertexData[j + 1]));
-		vertexCopy.push_back(Mat4Vec4Mul(modelviewProjection, mesh[i].vertexData[j + 2]));
-
-	    tcoordCopy.push_back(mesh[i].tcoordData[j + 0]);
-		tcoordCopy.push_back(mesh[i].tcoordData[j + 1]);
-		tcoordCopy.push_back(mesh[i].tcoordData[j + 2]);
-	  }
-	}
-	}
-	*/
 	projVerts.clear();
 	projTex.clear();
 
