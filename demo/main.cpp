@@ -10,7 +10,8 @@
 #include "texture.h"
 #include "myassert.h"
 #include "misc.h"
-#define DEBUG
+#include "objloader.h"
+
 struct Mesh {
 	std::vector<VectorPOD4f> vertexData; // Our original mesh
 	std::vector<VectorPOD4f> tcoordData; // Our original mesh
@@ -18,63 +19,124 @@ struct Mesh {
 	VectorPOD4f position;
 };
 
-//float time_elapsed = 8.472656f;
 unsigned int printAccum = 0;
-const int NUM_MESHES = 100;
 
 MatrixPOD4f clipMatrix;
 
 std::vector<VectorPOD4f> projVerts;
 std::vector<VectorPOD4f> projTex;
 
+float camRotX = 0.0f;
+float camRotY = 0.0f;
+VectorPOD4f camPosition = {0.0f, 0.0f, -20.0f, 1.0f};
+const float camTransVelocity = 2.0f;
+const float camRotVelocity = 12.0f;
+
+static void updateCamera(MatrixPOD4f& camera, float t)
+{
+  MatrixPOD4f rotX, rotY, trans;
+  VectorPOD4f forward, right;
+  float deltaX, deltaY;
+  Uint8 *keystate;
+
+  translate(trans, camPosition);
+  rotateX(rotX, camRotX);
+  rotateY(rotY, camRotY);
+  Mat4Mat4Mul(camera, rotX, rotY);
+  Mat4Mat4Mul(camera, trans, camera);
+
+  #if 0
+  forward.x = camera[2]; //2
+  forward.y = camera[6]; //6
+  forward.z = camera[10]; //10
+  forward.w = 1.0f;
+  right.x = camera[0]; //0
+  right.y = camera[4]; //4
+  right.z = camera[8]; //8
+  right.w = 1.0f;
+  #else
+  forward.x = 0.0f;
+  forward.y = 0.0f;
+  forward.z = -1.0f;
+  forward.w = 1.0f;
+  right.x = 1.0f;
+  right.y = 0.0f;
+  right.z = 0.0f;
+  right.w = 1.0f;
+  #endif
+
+  keystate = SDL_GetKeyState(NULL);
+  t = 0.125f;
+  if(keystate['w']){
+	camPosition.x -= forward.x * t * camTransVelocity;
+	camPosition.y -= forward.y * t * camTransVelocity;
+	camPosition.z -= forward.z * t * camTransVelocity;
+	//printf("pos %3f %3f %3f\n", camPosition.x, camPosition.y, camPosition.z);
+  } else if(keystate['s']){
+	camPosition.x += forward.x * t * camTransVelocity;
+	camPosition.y += forward.y * t * camTransVelocity;
+	camPosition.z += forward.z * t * camTransVelocity;
+  }
+  if(keystate['a']){
+	camPosition.x += right.x * t * camTransVelocity;
+	camPosition.y += right.y * t * camTransVelocity;
+	camPosition.z += right.z * t * camTransVelocity;
+  } else if(keystate['d']){
+	camPosition.x -= right.x * t * camTransVelocity;
+	camPosition.y -= right.y * t * camTransVelocity;
+	camPosition.z -= right.z * t * camTransVelocity;
+  }
+  /*
+  int x, y;
+  (void)SDL_GetMouseState(&x, &y);
+  int width = wc_colorbuffer->w;
+  int height = wc_colorbuffer->h;
+  camRotX = (float)(y - 240) / 240.0f * 90.0f;
+  camRotY = (float)(x - 320) / 320.0f * 180.0f;
+  camRotX = camRotX;
+  */
+  if(keystate[SDLK_UP]){
+	camRotX += (t * camRotVelocity);
+  } else if(keystate[SDLK_DOWN]){
+	camRotX -= (t * camRotVelocity);
+  }
+  if(keystate[SDLK_LEFT]){
+	camRotY -= (t * camRotVelocity);
+  } else if(keystate[SDLK_RIGHT]){
+	camRotY += (t * camRotVelocity);
+  }
+}
+
 static void loop(void* data)
 {
-	static bool doOnce = true;
-	unsigned int t = SDL_GetTicks();
+	int t = SDL_GetTicks();
+	static int lt = SDL_GetTicks();
 	float time_elapsed = static_cast<float>(t) * 0.001f;
-	Mesh* mesh = static_cast<Mesh*>(data);
+	float tDelta = (float)(lt-t) * 0.001f;
+	lt = t;
+	if(tDelta > 1.0) tDelta = 1.0f;
+	Mesh* mesh = static_cast<Mesh*>(data);	
 	const float fStep = 1.0f / (float)(1<<8);
-	if(SDL_GetKeyState(NULL)[SDLK_LEFT]) {
-		time_elapsed -= fStep;
-		printf("t %f\n", time_elapsed);
-	}
-	if(SDL_GetKeyState(NULL)[SDLK_RIGHT]) {
-		time_elapsed += fStep;
-		printf("t %f\n", time_elapsed);
-	}
 
-	SR_ClearBuffer(SR_COLOR_BUFFER | SR_DEPTH_BUFFER);
+	SR_ClearBuffer(SR_COLOR_BUFFER | SR_DEPTH_BUFFER );
 
 	float rt = time_elapsed;
 
 	projVerts.clear();
 	projTex.clear();
 
-	for(int i = 0; i < NUM_MESHES; ++i) {
-		float xOffset = 1.8f * std::sin(2.0f * M_PI * rt * mesh[i].rotationSpeed);
-		VectorPOD4f offsetVec = {xOffset, 0.0f, 0.0f, 1.0f};
+	MatrixPOD4f worldMatrix, modelviewProjection;
 
-		MatrixPOD4f trans0, trans1, rotX, rotY, rotZ, worldMatrix, modelviewProjection;
-		translate(trans0, offsetVec);
-		translate(trans1, mesh[i].position);
-		rotateX(rotX, 45.0f * rt * mesh[i].rotationSpeed);
-		rotateY(rotY, 60.0f * rt * mesh[i].rotationSpeed);
-		rotateZ(rotZ, 20.0f * rt * mesh[i].rotationSpeed);
+	updateCamera(worldMatrix, tDelta);
+	Mat4Mat4Mul(modelviewProjection, clipMatrix, worldMatrix);
 
-		Mat4Mat4Mul(worldMatrix, rotY, rotZ);
-		Mat4Mat4Mul(worldMatrix, rotX, worldMatrix);
-		Mat4Mat4Mul(worldMatrix, trans1, worldMatrix);
-		Mat4Mat4Mul(worldMatrix, trans0, worldMatrix);
-		Mat4Mat4Mul(modelviewProjection, clipMatrix, worldMatrix);
-
-		for(int j = 0; j < mesh[i].vertexData.size(); j+=3) {
-			projVerts.push_back(Mat4Vec4Mul(modelviewProjection, mesh[i].vertexData[j + 0]));
-			projVerts.push_back(Mat4Vec4Mul(modelviewProjection, mesh[i].vertexData[j + 1]));
-			projVerts.push_back(Mat4Vec4Mul(modelviewProjection, mesh[i].vertexData[j + 2]));
-			projTex.push_back(mesh[i].tcoordData[j + 0]);
-			projTex.push_back(mesh[i].tcoordData[j + 1]);
-			projTex.push_back(mesh[i].tcoordData[j + 2]);
-		}
+	for(int j = 0; j < mesh->vertexData.size(); j+=3) {
+	    projVerts.push_back(Mat4Vec4Mul(modelviewProjection, mesh->vertexData[j + 0]));
+		projVerts.push_back(Mat4Vec4Mul(modelviewProjection, mesh->vertexData[j + 1]));
+		projVerts.push_back(Mat4Vec4Mul(modelviewProjection, mesh->vertexData[j + 2]));
+		projTex.push_back(mesh->tcoordData[j + 0]);
+		projTex.push_back(mesh->tcoordData[j + 1]);
+		projTex.push_back(mesh->tcoordData[j + 2]);
 	}
 
 	SR_SetVertices(&projVerts);
@@ -109,29 +171,41 @@ int main(int argc, char* argv[])
 {
 	(void)argc;
 	(void)argv;
-	const int width = 640;
-	const int height = 480;
+	const int width = 1280;
+	const int height = 720;
 	const int depth = 32;
-	Mesh mesh[NUM_MESHES];
-
-	//srand(time(NULL));
-	perspective(clipMatrix, 60.0f, (float)width/(float)height, 1.0f, 40.0f);
-
-	for(int i = 0; i < NUM_MESHES; ++i) {
-		mesh[i].rotationSpeed = rnd_min_max(0.0f, 0.25f);
-		mesh[i].position.x = rnd_min_max(-1.0f, 1.0f);
-		mesh[i].position.y = rnd_min_max(-1.0f, 1.0f);
-		mesh[i].position.z = rnd_min_max(-2.5f, -30.0f);
-		mesh[i].position.w = 1.0f;
+	perspective(clipMatrix, 90.0f, (float)width/(float)height, 0.1f, 40.0f);
+	Mesh subway;
+	#if 1
+	if(!importWaveFrontObjModel("subway2_3_HQ.obj", subway.vertexData, subway.tcoordData)){
+	  printf("Couldn't load subway model\n");
+	  return 1;
 	}
-	SR_Init(width, height);
+	#else
+	if(!importWaveFrontObjModel("testcube.obj", subway.vertexData, subway.tcoordData)){
+	  printf("Couldn't load subway model\n");
+	  return 1;
+	}
+	#endif
+
+	ASSERT(subway.vertexData.size() == subway.tcoordData.size());
+	printf("Rendering %d triangles.\n", subway.vertexData.size() / 3);
+
+	SR_Init();
 	SR_SetCaption("Tile-Rasterizer Test");
 
-	const Texture* tex = ReadPNG("texture0.png");
+	#if 1
+	const Texture* tex = ReadPNG("subway2_2_baked.png");
+	#else
+	const Texture* tex = ReadPNG("testcube.png");
+	#endif
+	if(!tex){
+	  printf("Couldn't load subway texture\n");
+	  return 1;
+	}
+
 	SR_BindTexture0(tex);
-
-	for(int i=0; i<NUM_MESHES; ++i)
-		makeMeshCube(mesh[i].vertexData, mesh[i].tcoordData, 1.0f);
-
-	SR_MainLoop(loop, quit, (void*)&mesh[0]);
+	SR_MainLoop(loop, quit, (void*)&subway);
 }
+
+

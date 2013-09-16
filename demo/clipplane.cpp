@@ -14,42 +14,72 @@
 */
 void clip_triangle(Vector4f plane, unsigned int flags)
 {
-#if 0
+#if 1
 	unsigned int edge0, edge1;
 	unsigned int tri;
 
 	size_t vertexListSize = wc_vertices->size();
 
 	for(tri=0; tri<vertexListSize; tri+=3) {
-		std::vector<Vector4f> polygon; /* outputted vertices */
-		std::vector<Vector4f> polygon_tcoords0; /* interpolants */
-		std::vector<Vector4f> polygon_tcoords1;
-		std::vector<Vector4f> polygon_normals;
-		std::vector<Vector4f> polygon_colors;
+		std::vector<VectorPOD4f> polygon; /* outputted vertices */
+		std::vector<VectorPOD4f> polygon_tcoords0; /* interpolants */
+		std::vector<VectorPOD4f> polygon_tcoords1;
+		std::vector<VectorPOD4f> polygon_normals;
+		std::vector<VectorPOD4f> polygon_colors;
 
 		for(edge0=tri+2, edge1=tri; edge1 < tri+3; edge0 = edge1++) {
-			Vector4f point_current, point_next, tcoord0_current,
+			VectorPOD4f point_current, point_next, tcoord0_current,
 			         tcoord0_next, tcoord1_current, tcoord1_next, normal_current,
 			         normal_next, color_current, color_next;
 
-			point_current  = (*wc_vertices)[edge0];
-			point_next     = (*wc_vertices)[edge1];
+			point_current.x = (*wc_vertices)[edge0].x;
+			point_current.y = (*wc_vertices)[edge0].y;
+			point_current.z = (*wc_vertices)[edge0].z;
+			point_current.w = (*wc_vertices)[edge0].w;
+			point_next.x     = (*wc_vertices)[edge1].x;
+			point_next.y     = (*wc_vertices)[edge1].y;
+			point_next.z     = (*wc_vertices)[edge1].z;
+			point_next.w     = (*wc_vertices)[edge1].w;
 
 			if(flags & SR_TEXCOORD0) {
-				tcoord0_current = (*wc_tcoords0)[edge0];
-				tcoord0_next    = (*wc_tcoords0)[edge1];
+				tcoord0_current.x = (*wc_tcoords0)[edge0].x;
+				tcoord0_current.y = (*wc_tcoords0)[edge0].y;
+				tcoord0_current.z = (*wc_tcoords0)[edge0].z;
+				tcoord0_current.w = (*wc_tcoords0)[edge0].w;
+				tcoord0_next.x    = (*wc_tcoords0)[edge1].x;
+				tcoord0_next.y    = (*wc_tcoords0)[edge1].y;
+				tcoord0_next.z    = (*wc_tcoords0)[edge1].z;
+				tcoord0_next.w    = (*wc_tcoords0)[edge1].w;
 			}
 			if(flags & SR_TEXCOORD1) {
-				tcoord1_current = (*wc_tcoords1)[edge0];
-				tcoord1_next    = (*wc_tcoords1)[edge1];
+				tcoord1_current.x = (*wc_tcoords1)[edge0].x;
+				tcoord1_current.y = (*wc_tcoords1)[edge0].y;
+				tcoord1_current.z = (*wc_tcoords1)[edge0].z;
+				tcoord1_current.w = (*wc_tcoords1)[edge0].w;
+				tcoord1_next.x    = (*wc_tcoords1)[edge1].x;
+				tcoord1_next.y    = (*wc_tcoords1)[edge1].y;
+				tcoord1_next.z    = (*wc_tcoords1)[edge1].z;
+				tcoord1_next.w    = (*wc_tcoords1)[edge1].w;
 			}
 			if(flags & SR_LIGHTING) {
-				normal_current = (*wc_normals)[edge0];
-				normal_next    = (*wc_normals)[edge1];
+				normal_current.x = (*wc_normals)[edge0].x;
+				normal_current.y = (*wc_normals)[edge0].y;
+				normal_current.z = (*wc_normals)[edge0].z;
+				normal_current.w = (*wc_normals)[edge0].w;
+				normal_next.x    = (*wc_normals)[edge1].x;
+				normal_next.y    = (*wc_normals)[edge1].y;
+				normal_next.z    = (*wc_normals)[edge1].z;
+				normal_next.w    = (*wc_normals)[edge1].w;
 			}
 			if(flags & SR_COLOR) {
-				color_current = (*wc_colors)[edge0];
-				color_next    = (*wc_colors)[edge1];
+				color_current.x = (*wc_colors)[edge0].x;
+				color_current.y = (*wc_colors)[edge0].y;
+				color_current.z = (*wc_colors)[edge0].z;
+				color_current.w = (*wc_colors)[edge0].w;
+				color_next.x    = (*wc_colors)[edge1].x;
+				color_next.y    = (*wc_colors)[edge1].y;
+				color_next.z    = (*wc_colors)[edge1].z;
+				color_next.w    = (*wc_colors)[edge1].w;
 			}
 
 			/* point.w is positive*/
@@ -57,8 +87,17 @@ void clip_triangle(Vector4f plane, unsigned int flags)
 			//float wInv_current = 1.0f / point_current.w;
 			//float wInv_next = 1.0f / point_next.w;
 
-			float dot0 = dot(point_current, plane) + point_current.w * plane.w;
-			float dot1 = dot(point_next,    plane) + point_next.w    * plane.w;
+			float dot0 =
+			  point_current.x*plane.x +
+			  point_current.y*plane.y +
+			  point_current.z*plane.z +
+			  point_current.w*plane.w;
+
+			float dot1 =
+			  point_next.x*plane.x +
+			  point_next.y*plane.y +
+			  point_next.z*plane.z +
+			  point_next.w*plane.w;
 
 			bool inside0 = dot0 > 0.0f;
 			bool inside1 = dot1 > 0.0f;
@@ -102,29 +141,63 @@ void clip_triangle(Vector4f plane, unsigned int flags)
 					t = dot0 / diff;
 				if(std::abs(t) < 0.001f) t = 0.0f;
 
-				Vector4f offsetPoint = (point_next - point_current) * t;
-				Vector4f clipPoint = point_current + offsetPoint;
-				clipPoint.w = point_current.w + (point_next.w - point_current.w) * t;
+				VectorPOD4f offsetPoint, clipPoint;
+				offsetPoint.x = (point_next.x - point_current.x) * t;
+				offsetPoint.y = (point_next.y - point_current.y) * t;
+				offsetPoint.z = (point_next.z - point_current.z) * t;
+				offsetPoint.w = (point_next.w - point_current.w) * t;
+				clipPoint.x = point_current.x + offsetPoint.x;
+				clipPoint.y = point_current.y + offsetPoint.y;
+				clipPoint.z = point_current.z + offsetPoint.z;
+				clipPoint.w = point_current.w + offsetPoint.w;
 				polygon.push_back(clipPoint);
 
 				if(flags & SR_TEXCOORD0) {
-					Vector4f offsetTCoord = (tcoord0_next - tcoord0_current) * t;
-					Vector4f clipTCoord = tcoord0_current + offsetTCoord;
+				    VectorPOD4f offsetTCoord, clipTCoord;
+					offsetTCoord.x = (tcoord0_next.x - tcoord0_current.x) * t;
+					offsetTCoord.y = (tcoord0_next.y - tcoord0_current.y) * t;
+					offsetTCoord.z = (tcoord0_next.z - tcoord0_current.z) * t;
+					offsetTCoord.w = (tcoord0_next.w - tcoord0_current.w) * t;
+					clipTCoord.x = tcoord0_current.x + offsetTCoord.x;
+					clipTCoord.y = tcoord0_current.y + offsetTCoord.y;
+					clipTCoord.z = tcoord0_current.z + offsetTCoord.z;
+					clipTCoord.w = tcoord0_current.w + offsetTCoord.w;
 					polygon_tcoords0.push_back(clipTCoord);
 				}
 				if(flags & SR_TEXCOORD1) {
-					Vector4f offsetTCoord = (tcoord1_next - tcoord1_current) * t;
-					Vector4f clipTCoord = tcoord1_current + offsetTCoord;
+				    VectorPOD4f offsetTCoord, clipTCoord;
+					offsetTCoord.x = (tcoord1_next.x - tcoord1_current.x) * t;
+					offsetTCoord.y = (tcoord1_next.y - tcoord1_current.y) * t;
+					offsetTCoord.z = (tcoord1_next.z - tcoord1_current.z) * t;
+					offsetTCoord.w = (tcoord1_next.w - tcoord1_current.w) * t;
+					clipTCoord.x = tcoord1_current.x + offsetTCoord.x;
+					clipTCoord.y = tcoord1_current.y + offsetTCoord.y;
+					clipTCoord.z = tcoord1_current.z + offsetTCoord.z;
+					clipTCoord.w = tcoord1_current.w + offsetTCoord.w;
 					polygon_tcoords1.push_back(clipTCoord);
 				}
 				if(flags & SR_LIGHTING) {
-					Vector4f offsetNormal = (normal_next - normal_current) * t;
-					Vector4f clipNormal = normal_current + offsetNormal;
+				    VectorPOD4f offsetNormal, clipNormal;
+					offsetNormal.x = (normal_next.x - normal_current.x) * t;
+					offsetNormal.y = (normal_next.y - normal_current.y) * t;
+					offsetNormal.z = (normal_next.z - normal_current.z) * t;
+					offsetNormal.w = (normal_next.w - normal_current.w) * t;
+					clipNormal.x = normal_current.x + offsetNormal.x;
+					clipNormal.y = normal_current.y + offsetNormal.y;
+					clipNormal.z = normal_current.z + offsetNormal.z;
+					clipNormal.w = normal_current.w + offsetNormal.w;
 					polygon_normals.push_back(clipNormal);
 				}
 				if(flags & SR_COLOR) {
-					Vector4f offsetColor = (color_next - color_current) * t;
-					Vector4f clipColor = color_current + offsetColor;
+				    VectorPOD4f offsetColor, clipColor;
+					offsetColor.x = (color_next.x - color_current.x) * t;
+					offsetColor.y = (color_next.y - color_current.y) * t;
+					offsetColor.z = (color_next.z - color_current.z) * t;
+					offsetColor.w = (color_next.w - color_current.w) * t;
+					clipColor.x = color_current.x + offsetColor.x;
+					clipColor.y = color_current.y + offsetColor.y;
+					clipColor.z = color_current.z + offsetColor.z;
+					clipColor.w = color_current.w + offsetColor.w;
 					polygon_colors.push_back(clipColor);
 				}
 			}

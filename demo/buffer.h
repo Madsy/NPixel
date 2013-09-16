@@ -75,11 +75,11 @@ template<typename T> struct Buffer2D {
 	inline const T& operator[](size_t index) const {
 		return data[index];
 	}
-	T* Lock() {
+	void* Lock() {
 		if(isHWBuffer) {
 			SDL_Surface* s = SDL_GetVideoSurface();
 			SDL_LockSurface(s);
-			return (T*)s->pixels;
+			return s->pixels;
 		}
 		return data;
 	}
@@ -89,7 +89,7 @@ template<typename T> struct Buffer2D {
 			SDL_UnlockSurface(s);
 		}
 	}
-	T* Ptr() {
+	void* Ptr() {
 		return data;
 	}
 	bool isHWBuffer;

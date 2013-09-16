@@ -15,9 +15,10 @@ void SR_MainLoop(void (*cb_loop)(void*),
 	bool running = true;
 	SDL_Event event;
 	unsigned int accum = 0;
-	//SDL_ShowCursor(0);
+	SDL_ShowCursor(0);
+	//SDL_WM_GrabInput(SDL_GRAB_ON);
 	while(running) {
-		if(!(accum & 0xF)) {
+	  //if(!(accum & 0xF)) {
 			while(SDL_PollEvent(&event)) {
 				switch(event.type) {
 				case SDL_KEYDOWN:
@@ -30,12 +31,13 @@ void SR_MainLoop(void (*cb_loop)(void*),
 					break;
 				}
 			}
-		}
+		//}
 		++accum;
 		cb_loop(data);
 	}
 	cb_clean(data);
-	//  SDL_ShowCursor(1);
+	SDL_WM_GrabInput(SDL_GRAB_OFF);
+	SDL_ShowCursor(1);
 	SR_Quit();
 }
 

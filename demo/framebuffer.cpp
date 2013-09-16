@@ -1,6 +1,30 @@
 #include <algorithm>
 #include "framebuffer.h"
 
+/* Width and height of framebuffer */
+unsigned int wc_width = 640;
+unsigned int wc_height = 480;
+/* bits per pixel */
+unsigned int wc_bpp = 16;
+/* alpha not supported if alpha shift is 0 */
+bool wc_alphaSupported = false;
+/* Masks for R, G, B, A. Support 15, 16 and 24 bit modes */
+unsigned int wc_aMask = 0xFF000000;
+unsigned int wc_rMask = 0x00FF0000;
+unsigned int wc_gMask = 0x0000FF00;
+unsigned int wc_bMask = 0x000000FF;
+/* Shifts for R, G, B, A. Support 15, 16 and 24 bit modes */
+unsigned int wc_aShift = 24;
+unsigned int wc_rShift = 16;
+unsigned int wc_gShift = 8;
+unsigned int wc_bShift = 0;
+/* Shifts for when converting from 24bpp or 32bpp to the internal mode
+ The "loss" is the number of bits lost per channel*/
+unsigned int wc_aLoss = 0;
+unsigned int wc_rLoss = 0;
+unsigned int wc_gLoss = 0;
+unsigned int wc_bLoss = 0;
+
 Buffer2D<unsigned int> wc_screenbuffer; //actual pointer to HW framebuffer (default)
 Buffer2D<unsigned short> wc_screendepthbuffer; //default depth buffer
 Buffer2D<unsigned int>* wc_colorbuffer; //points to current buffer
@@ -18,17 +42,18 @@ void SR_InitBuffers(unsigned int width, unsigned int height)
 void SR_ClearBuffer(unsigned int type)
 {
 	if((type & SR_COLOR_BUFFER) && wc_colorbuffer != 0) {
-		unsigned int* p = wc_colorbuffer->Lock();
+		void* p = wc_colorbuffer->Lock();
 		//std::fill(wc_colorbuffer.data.begin(),
 		//		  wc_colorbuffer.data.end(), 0xFFFFFFFF);
-		unsigned int len = wc_colorbuffer->w * wc_colorbuffer->h * sizeof(unsigned int);
+		int bytesperpixel = (wc_bpp + 7) / 8;
+		unsigned int len = wc_colorbuffer->w * wc_colorbuffer->h * bytesperpixel;
 		memset(p, 0, len);
 		wc_colorbuffer->Unlock();
 	}
 	if((type & SR_DEPTH_BUFFER) && wc_depthbuffer != 0) {
 		//std::fill(wc_depthbuffer.data.begin(),
 		//		  wc_depthbuffer.data.end(), 65535);
-		unsigned short* p = wc_depthbuffer->Ptr();
+		void* p = wc_depthbuffer->Ptr();
 		unsigned int len = wc_depthbuffer->w * wc_depthbuffer->h * sizeof(unsigned short);
 		memset(p, 255, len);
 	}

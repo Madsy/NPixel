@@ -10,6 +10,7 @@ SET( ${PROJECT_NAME}_SOURCES
   vertexdata.cpp
   loop.cpp
   misc.cpp
+  objloader.cpp
 )
 
 ADD_EXECUTABLE(${PROJECT_NAME} ${${PROJECT_NAME}_SOURCES})
