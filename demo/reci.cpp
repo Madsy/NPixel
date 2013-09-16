@@ -1,4 +1,5 @@
 #include <linealg.h>
+#if defined (X86) || defined (X86_32) || defined (X86_64) || defined (IA32) || defined (IA64)
 
 int reci11(int val)
 {
@@ -45,3 +46,20 @@ int reci8(int val)
 	);
 	return ret;
 }
+
+#else
+int reci11(int val)
+{
+  return (1 << 22) / val;
+}
+
+int reci15(int val)
+{
+  return (1 << 30) / val;
+}
+
+int reci8(int val)
+{
+  return (1 << 16) / val;
+}
+#endif
