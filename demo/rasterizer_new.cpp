@@ -372,7 +372,8 @@ void DrawTriangles(unsigned int flags)
     }
     wc_colorbuffer->Unlock();
 }
-#endif
+
+#else
 
 struct TileInfo {
     int bwSlopeY0;
@@ -406,16 +407,8 @@ struct TileInfo {
     unsigned int y;
 };
 
-
-/*
-    void* buf_color;
-    void* buf_depth;
-    void* buf_texture;
-    unsigned int texWidth;
-    unsigned int texHeight;
-*/
 template<bool filled>
-static inline void DrawTileFilled888(TileInfo info)
+static inline void DrawTileFilled888(TileInfo& info)
 {
     /* pointer for 15, 16, 24 and 32-bit bpp */
     unsigned int* buf_color = (unsigned int*)wc_colorbuffer->Lock();
@@ -425,6 +418,10 @@ static inline void DrawTileFilled888(TileInfo info)
     const unsigned short texHeight = wc_texture0->height;
 
     int col = info.y * wc_width;
+
+	// Compiler hint. x and y are always aligned to tile size
+	info.x &= ~(q - 1);
+    info.y &= ~(q - 1);
 
     for(int iy = info.y; iy < info.y + q; iy++) {
         int bwSlopeX0 = info.bwSlopeYAccum1 - info.bwSlopeYAccum0;
@@ -441,10 +438,6 @@ static inline void DrawTileFilled888(TileInfo info)
             CX2_0 = info.CY2;
             CX3_0 = info.CY3;
         }
-
-        // Compiler hint. x and y are always aligned to tile size
-        info.x &= ~(q - 1);
-        info.y &= ~(q - 1);
         
         for(int ix = info.x; ix < info.x + q; ix += 2) {
             unsigned short z0 = bzSlopeXAccum0 >> (Q*2);
@@ -455,9 +448,11 @@ static inline void DrawTileFilled888(TileInfo info)
                 int CX1_1 = CX1_0 - info.FDY12;
                 int CX2_1 = CX2_0 - info.FDY23;
                 int CX3_1 = CX3_0 - info.FDY31;
+			    unsigned char insideCmp0 = (CX1_0 > 0) & (CX2_0 > 0) & (CX3_0 > 0);
+				unsigned char insideCmp1 = (CX1_1 > 0) & (CX2_1 > 0) & (CX3_1 > 0);
                 // Both depth-test and interior test must pass
-                z0Cmp &= (CX1_0 > 0 && CX2_0 > 0 && CX3_0 > 0);
-                z1Cmp &= (CX1_1 > 0 && CX2_1 > 0 && CX3_1 > 0);
+                z0Cmp &= insideCmp0;
+                z1Cmp &= insideCmp1;
             }
             unsigned char z2Flag = (z1Cmp << 1) | z0Cmp;
             // Two pixels, four cases:
@@ -477,17 +472,20 @@ static inline void DrawTileFilled888(TileInfo info)
                     CX2_0 -= (info.FDY23 << 1);
                     CX3_0 -= (info.FDY31 << 1);
                 }
+				break;
             }
             case 1: {
                 int uw = buSlopeXAccum0>>(Q*2);
                 int vw = bvSlopeXAccum0>>(Q*2);
                 int w = bwSlopeXAccum0>>(Q*2);
                 //If we interpolate w instead of 1/w ..
-                if(w) w = ((long long)1<<(coeff_precision_base * 2)) / w;
-                unsigned short u = ((long long)uw*w*(texWidth - 1)) >> (coeff_precision_base * 2);
-                unsigned short v = ((long long)vw*w*(texHeight - 1)) >> (coeff_precision_base * 2);
-                u = clamp((unsigned int)u, 0u, texWidth-1u);
-                v = clamp((unsigned int)v, 0u, texHeight-1u);
+                if(w) w = (1<<(coeff_precision_base * 2)) / w;
+                //int u = ((long long)uw*w*(texWidth - 1)) >> (coeff_precision_base * 2);
+                //int v = ((long long)vw*w*(texHeight - 1)) >> (coeff_precision_base * 2);
+				int u = (((uw*w)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+				int v = (((vw*w)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+                u = clamp(u, 0, (int)texWidth-1);
+                v = clamp(v, 0, (int)texHeight-1);
                 unsigned int color32 = buf_texture[u + v*texWidth];
                 buf_depth[ix + col] = z0;
                 buf_color[ix + col] = color32;
@@ -509,13 +507,13 @@ static inline void DrawTileFilled888(TileInfo info)
                 int vw = (bvSlopeXAccum0 + bvSlopeX0)>>(Q*2);
                 int w  = (bwSlopeXAccum0 + bwSlopeX0)>>(Q*2);
                 //If we interpolate w instead of 1/w ..
-                if(w) w = ((long long)1<<(coeff_precision_base * 2)) / w;
-                unsigned short u = ((long long)uw*w*(texWidth - 1)) >> (coeff_precision_base);
-                unsigned short v = ((long long)vw*w*(texHeight - 1)) >> (coeff_precision_base);
-                u >>= coeff_precision_base;
-                v >>= coeff_precision_base;
-                u = clamp((unsigned int)u, 0u, texWidth-1u);
-                v = clamp((unsigned int)v, 0u, texHeight-1u);
+                if(w) w = (1<<(coeff_precision_base * 2)) / w;
+                //int u = ((long long)uw*w*(texWidth - 1)) >> (coeff_precision_base * 2);
+                //int v = ((long long)vw*w*(texHeight - 1)) >> (coeff_precision_base * 2);
+				int u = (((uw*w)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+				int v = (((vw*w)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+                u = clamp(u, 0, (int)texWidth-1);
+                v = clamp(v, 0, (int)texHeight-1);
                 unsigned int color32 = buf_texture[u + v*texWidth];
                 buf_depth[1 + ix + col] = z1;
                 buf_color[1 + ix + col] = color32;
@@ -540,16 +538,23 @@ static inline void DrawTileFilled888(TileInfo info)
                 int w0  =  bwSlopeXAccum0>>(Q*2);
                 int w1  = (bwSlopeXAccum0 + bwSlopeX0)>>(Q*2);
                 //If we interpolate w instead of 1/w ..
-                if(w0) w0 = ((long long)1<<(coeff_precision_base * 2)) / w0;
-                if(w1) w1 = ((long long)1<<(coeff_precision_base * 2)) / w1;
-                unsigned short u0 = ((long long)uw0*w0*(texWidth  - 1)) >> (coeff_precision_base * 2);
-                unsigned short u1 = ((long long)uw1*w1*(texWidth  - 1)) >> (coeff_precision_base * 2);
-                unsigned short v0 = ((long long)vw0*w0*(texHeight - 1)) >> (coeff_precision_base * 2);
-                unsigned short v1 = ((long long)vw1*w1*(texHeight - 1)) >> (coeff_precision_base * 2);
-                u0 = clamp((unsigned int)u0, 0u, texWidth-1u);
-                u1 = clamp((unsigned int)u1, 0u, texWidth-1u);
-                v0 = clamp((unsigned int)v0, 0u, texHeight-1u);
-                v1 = clamp((unsigned int)v1, 0u, texHeight-1u);
+                if(w0) w0 = (1<<(coeff_precision_base * 2)) / w0;
+                if(w1) w1 = (1<<(coeff_precision_base * 2)) / w1;
+				/*
+                int u0 = ((long long)uw0*w0*(texWidth  - 1)) >> (coeff_precision_base * 2);
+                int u1 = ((long long)uw1*w1*(texWidth  - 1)) >> (coeff_precision_base * 2);
+                int v0 = ((long long)vw0*w0*(texHeight - 1)) >> (coeff_precision_base * 2);
+                int v1 = ((long long)vw1*w1*(texHeight - 1)) >> (coeff_precision_base * 2);
+				*/
+				int u0 = (((uw0*w0)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+				int u1 = (((uw1*w1)>>coeff_precision_base) * (texHeight - 1)) >> coeff_precision_base;
+				int v0 = (((vw0*w0)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+				int v1 = (((vw1*w1)>>coeff_precision_base) * (texHeight - 1)) >> coeff_precision_base;
+
+                u0 = clamp(u0, 0, (int)texWidth-1);
+                u1 = clamp(u1, 0, (int)texWidth-1);
+                v0 = clamp(v0, 0, (int)texHeight-1);
+                v1 = clamp(v1, 0, (int)texHeight-1);
                 unsigned int color32_0 = buf_texture[u0 + v0*texWidth];
                 unsigned int color32_1 = buf_texture[u1 + v1*texWidth];
                 ((unsigned int*)buf_depth)[(ix + col)>>1] = ((unsigned int)z1 << 16) | z0;
@@ -587,7 +592,7 @@ static inline void DrawTileFilled888(TileInfo info)
 }
 
 template<bool filled>
-static inline void DrawTileFilled565(TileInfo info)
+static inline void DrawTileFilled565(TileInfo& info)
 {
     /* pointer for 15, 16, 24 and 32-bit bpp */
     unsigned short* buf_color = (unsigned short*)wc_colorbuffer->Lock();
@@ -597,6 +602,10 @@ static inline void DrawTileFilled565(TileInfo info)
     const unsigned short texHeight = wc_texture0->height;
 
     int col = info.y * wc_width;
+
+	// Compiler hint. x and y are always aligned to tile size
+	info.x &= ~(q - 1);
+    info.y &= ~(q - 1);
 
     for(int iy = info.y; iy < info.y + q; iy++) {
         int bwSlopeX0 = info.bwSlopeYAccum1 - info.bwSlopeYAccum0;
@@ -613,10 +622,6 @@ static inline void DrawTileFilled565(TileInfo info)
             CX2_0 = info.CY2;
             CX3_0 = info.CY3;
         }
-
-        // Compiler hint. x and y are always aligned to tile size
-        //info.x &= ~(q - 1);
-        //info.y &= ~(q - 1);
         
         for(int ix = info.x; ix < info.x + q; ix += 2) {
             unsigned short z0 = bzSlopeXAccum0 >> (Q*2);
@@ -627,9 +632,11 @@ static inline void DrawTileFilled565(TileInfo info)
                 int CX1_1 = CX1_0 - info.FDY12;
                 int CX2_1 = CX2_0 - info.FDY23;
                 int CX3_1 = CX3_0 - info.FDY31;
+			    unsigned char insideCmp0 = (CX1_0 > 0) & (CX2_0 > 0) & (CX3_0 > 0);
+				unsigned char insideCmp1 = (CX1_1 > 0) & (CX2_1 > 0) & (CX3_1 > 0);
                 // Both depth-test and interior test must pass
-                z0Cmp &= (unsigned char)(CX1_0 > 0 && CX2_0 > 0 && CX3_0 > 0);
-                z1Cmp &= (unsigned char)(CX1_1 > 0 && CX2_1 > 0 && CX3_1 > 0);
+                z0Cmp &= insideCmp0;
+                z1Cmp &= insideCmp1;
             }
             unsigned char z2Flag = (z1Cmp << 1) | z0Cmp;
             // Two pixels, four cases:
@@ -645,75 +652,71 @@ static inline void DrawTileFilled565(TileInfo info)
                 bvSlopeXAccum0 += (bvSlopeX0 << 1);
                 // Skip two pixels ahead
                 if(!filled){
-                    CX1_0 -= (info.FDY12 * 2);
-                    CX2_0 -= (info.FDY23 * 2);
-                    CX3_0 -= (info.FDY31 * 2);
+                    CX1_0 -= (info.FDY12 << 1);
+                    CX2_0 -= (info.FDY23 << 1);
+                    CX3_0 -= (info.FDY31 << 1);
                 }
+				break;
             }
             case 1: {
-                /*
                 int uw = buSlopeXAccum0>>(Q*2);
                 int vw = bvSlopeXAccum0>>(Q*2);
                 int w = bwSlopeXAccum0>>(Q*2);
                 //If we interpolate w instead of 1/w ..
-                if(w) w = ((long long)1<<(coeff_precision_base * 2)) / w;
-                unsigned short u = ((long long)uw*w*(texWidth - 1)) >> (coeff_precision_base * 2);
-                unsigned short v = ((long long)vw*w*(texHeight - 1)) >> (coeff_precision_base * 2);
-                u = clamp((unsigned int)u, 0u, texWidth-1u);
-                v = clamp((unsigned int)v, 0u, texHeight-1u);
+                if(w) w = (1<<(coeff_precision_base * 2)) / w;				
+                //int u = ((long long)uw*w*(texWidth - 1)) >> (coeff_precision_base * 2);
+                //int v = ((long long)vw*w*(texHeight - 1)) >> (coeff_precision_base * 2);
+				int u = (((uw*w)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+				int v = (((vw*w)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+                u = clamp(u, 0, (int)texWidth-1);
+                v = clamp(v, 0, (int)texHeight-1);
                 unsigned int color32 = buf_texture[u + v*texWidth];
-                unsigned short color16 = ConvertToInternalColorFormat(color32);
+				unsigned short color16 = ConvertToInternalColorFormat(color32);
                 buf_depth[ix + col] = z0;
                 buf_color[ix + col] = color16;
-                */
-                buf_depth[ix + col] = z0;
-                buf_color[ix + col] = ConvertToInternalColorFormat(0x00FF0000);
-                
+
                 bwSlopeXAccum0 += (bwSlopeX0 << 1);
                 bzSlopeXAccum0 += (bzSlopeX0 << 1);
                 buSlopeXAccum0 += (buSlopeX0 << 1);
                 bvSlopeXAccum0 += (bvSlopeX0 << 1);
                 // Skip two pixels ahead
                 if(!filled){
-                    CX1_0 -= (info.FDY12 * 2);
-                    CX2_0 -= (info.FDY23 * 2);
-                    CX3_0 -= (info.FDY31 * 2);
+                    CX1_0 -= (info.FDY12 << 1);
+                    CX2_0 -= (info.FDY23 << 1);
+                    CX3_0 -= (info.FDY31 << 1);
                 }
                 break;
             }
             case 2: {
-                /*
                 int uw = (buSlopeXAccum0 + buSlopeX0)>>(Q*2);
                 int vw = (bvSlopeXAccum0 + bvSlopeX0)>>(Q*2);
                 int w  = (bwSlopeXAccum0 + bwSlopeX0)>>(Q*2);
                 //If we interpolate w instead of 1/w ..
-                if(w) w = ((long long)1<<(coeff_precision_base * 2)) / w;
-                unsigned short u = ((long long)uw*w*(texWidth - 1)) >> (coeff_precision_base * 2);
-                unsigned short v = ((long long)vw*w*(texHeight - 1)) >> (coeff_precision_base * 2);
-                u = clamp((unsigned int)u, 0u, texWidth-1u);
-                v = clamp((unsigned int)v, 0u, texHeight-1u);
+                if(w) w = (1<<(coeff_precision_base * 2)) / w;
+                //int u = ((long long)uw*w*(texWidth - 1)) >> (coeff_precision_base * 2);
+                //int v = ((long long)vw*w*(texHeight - 1)) >> (coeff_precision_base * 2);
+				int u = (((uw*w)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+				int v = (((vw*w)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+                u = clamp(u, 0, (int)texWidth-1);
+                v = clamp(v, 0, (int)texHeight-1);
                 unsigned int color32 = buf_texture[u + v*texWidth];
-                unsigned short color16 = ConvertToInternalColorFormat(color32);
+				unsigned short color16 = ConvertToInternalColorFormat(color32);
                 buf_depth[1 + ix + col] = z1;
                 buf_color[1 + ix + col] = color16;
-                */
-                buf_depth[1+ ix + col] = z1;
-                buf_color[1+ ix + col] = ConvertToInternalColorFormat(0x0000FF00);
-                
+
                 bwSlopeXAccum0 += (bwSlopeX0 << 1);
                 bzSlopeXAccum0 += (bzSlopeX0 << 1);
                 buSlopeXAccum0 += (buSlopeX0 << 1);
                 bvSlopeXAccum0 += (bvSlopeX0 << 1);
                 // Skip two pixels ahead
                 if(!filled){
-                    CX1_0 -= (info.FDY12 * 2);
-                    CX2_0 -= (info.FDY23 * 2);
-                    CX3_0 -= (info.FDY31 * 2);
+                    CX1_0 -= (info.FDY12 << 1);
+                    CX2_0 -= (info.FDY23 << 1);
+                    CX3_0 -= (info.FDY31 << 1);
                 }
                 break;
             }
             case 3: {
-                /*
                 int uw0 =  buSlopeXAccum0>>(Q*2);
                 int uw1 = (buSlopeXAccum0 + buSlopeX0)>>(Q*2);
                 int vw0 =  bvSlopeXAccum0>>(Q*2);
@@ -721,39 +724,40 @@ static inline void DrawTileFilled565(TileInfo info)
                 int w0  =  bwSlopeXAccum0>>(Q*2);
                 int w1  = (bwSlopeXAccum0 + bwSlopeX0)>>(Q*2);
                 //If we interpolate w instead of 1/w ..
-                if(w0) w0 = ((long long)1<<(coeff_precision_base * 2)) / w0;
-                if(w1) w1 = ((long long)1<<(coeff_precision_base * 2)) / w1;
-                unsigned short u0 = ((long long)uw0*w0*(texWidth  - 1)) >> (coeff_precision_base * 2);
-                unsigned short u1 = ((long long)uw1*w1*(texWidth  - 1)) >> (coeff_precision_base * 2);
-                unsigned short v0 = ((long long)vw0*w0*(texHeight - 1)) >> (coeff_precision_base * 2);
-                unsigned short v1 = ((long long)vw1*w1*(texHeight - 1)) >> (coeff_precision_base * 2);
-                u0 = clamp((unsigned int)u0, 0u, texWidth-1u);
-                u1 = clamp((unsigned int)u1, 0u, texWidth-1u);
-                v0 = clamp((unsigned int)v0, 0u, texHeight-1u);
-                v1 = clamp((unsigned int)v1, 0u, texHeight-1u);
+                if(w0) w0 = (1<<(coeff_precision_base * 2)) / w0;
+                if(w1) w1 = (1<<(coeff_precision_base * 2)) / w1;
+				/*
+                int u0 = ((long long)uw0*w0*(texWidth  - 1)) >> (coeff_precision_base * 2);
+                int u1 = ((long long)uw1*w1*(texWidth  - 1)) >> (coeff_precision_base * 2);
+                int v0 = ((long long)vw0*w0*(texHeight - 1)) >> (coeff_precision_base * 2);
+                int v1 = ((long long)vw1*w1*(texHeight - 1)) >> (coeff_precision_base * 2);
+				*/
+				int u0 = (((uw0*w0)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+				int u1 = (((uw1*w1)>>coeff_precision_base) * (texHeight - 1)) >> coeff_precision_base;
+				int v0 = (((vw0*w0)>>coeff_precision_base) * (texWidth  - 1)) >> coeff_precision_base;
+				int v1 = (((vw1*w1)>>coeff_precision_base) * (texHeight - 1)) >> coeff_precision_base;
+
+                u0 = clamp(u0, 0, (int)texWidth-1);
+                u1 = clamp(u1, 0, (int)texWidth-1);
+                v0 = clamp(v0, 0, (int)texHeight-1);
+                v1 = clamp(v1, 0, (int)texHeight-1);
                 unsigned int color32_0 = buf_texture[u0 + v0*texWidth];
                 unsigned int color32_1 = buf_texture[u1 + v1*texWidth];
-                unsigned short color16_0 = ConvertToInternalColorFormat(color32_0);
-                unsigned short color16_1 = ConvertToInternalColorFormat(color32_1);
+				unsigned short color16_0, color16_1;
+				color16_0 = ConvertToInternalColorFormat(color32_0);
+				color16_1 = ConvertToInternalColorFormat(color32_1);
                 ((unsigned int*)buf_depth)[(ix + col)>>1] = ((unsigned int)z1 << 16) | z0;
-                //((unsigned int*)buf_color)[(ix + col)>>1] = ((unsigned int)color16_1 << 16) | color16_0;
-                buf_color[    ix + col] = color16_0;
-                buf_color[1 + ix + col] = color16_1;
-                */
-                buf_depth[   ix + col] = z0;
-                buf_depth[1+ ix + col] = z1;
-                buf_color[   ix + col] = ConvertToInternalColorFormat(0x000000FF);
-                buf_color[1+ ix + col] = ConvertToInternalColorFormat(0x000000FF);
-                
+                ((unsigned int*)buf_color)[(ix + col)>>1] = ((unsigned int)color16_1 << 16) | color16_0;
+
                 bwSlopeXAccum0 += (bwSlopeX0 << 1);
                 bzSlopeXAccum0 += (bzSlopeX0 << 1);
                 buSlopeXAccum0 += (buSlopeX0 << 1);
                 bvSlopeXAccum0 += (bvSlopeX0 << 1);
                 // Skip two pixels ahead
                 if(!filled){
-                    CX1_0 -= (info.FDY12 * 2);
-                    CX2_0 -= (info.FDY23 * 2);
-                    CX3_0 -= (info.FDY31 * 2);
+                    CX1_0 -= (info.FDY12 << 1);
+                    CX2_0 -= (info.FDY23 << 1);
+                    CX3_0 -= (info.FDY31 << 1);
                 }
                 break;
             }
@@ -775,8 +779,6 @@ static inline void DrawTileFilled565(TileInfo info)
         }
     }
 }
-
-//unsigned short color16 = ConvertToInternalColorFormat(color32);
 
 void DrawTriangles(unsigned int flags)
 {
@@ -940,27 +942,27 @@ void DrawTriangles(unsigned int flags)
                 int bzy0 = (NDC_y0 - i_ndc_precision) >> base_diff_z;
                 int bzy1 = (NDC_y1 - i_ndc_precision) >> base_diff_z;
 
-                int bw0 = (((long long)Aw*bwx0 + (long long)Bw*bwy0)>>coeff_precision_base) + Cw; //top left
-                int bw1 = (((long long)Aw*bwx0 + (long long)Bw*bwy1)>>coeff_precision_base) + Cw; //bottom left
-                int bw2 = (((long long)Aw*bwx1 + (long long)Bw*bwy0)>>coeff_precision_base) + Cw; //top right
-                int bw3 = (((long long)Aw*bwx1 + (long long)Bw*bwy1)>>coeff_precision_base) + Cw; //bottom right
+                int bw0 = ((Aw*bwx0 + Bw*bwy0)>>coeff_precision_base) + Cw; //top left
+                int bw1 = ((Aw*bwx0 + Bw*bwy1)>>coeff_precision_base) + Cw; //bottom left
+                int bw2 = ((Aw*bwx1 + Bw*bwy0)>>coeff_precision_base) + Cw; //top right
+                int bw3 = ((Aw*bwx1 + Bw*bwy1)>>coeff_precision_base) + Cw; //bottom right
 
-                int bz0 = (((long long)Az*bzx0 + (long long)Bz*bzy0)>>depth_precision_base) + Cz; //top left
-                int bz1 = (((long long)Az*bzx0 + (long long)Bz*bzy1)>>depth_precision_base) + Cz; //bottom left
-                int bz2 = (((long long)Az*bzx1 + (long long)Bz*bzy0)>>depth_precision_base) + Cz; //top right
-                int bz3 = (((long long)Az*bzx1 + (long long)Bz*bzy1)>>depth_precision_base) + Cz; //bottom right
+                int bz0 = ((Az*bzx0 + Bz*bzy0)>>depth_precision_base) + Cz; //top left
+                int bz1 = ((Az*bzx0 + Bz*bzy1)>>depth_precision_base) + Cz; //bottom left
+                int bz2 = ((Az*bzx1 + Bz*bzy0)>>depth_precision_base) + Cz; //top right
+                int bz3 = ((Az*bzx1 + Bz*bzy1)>>depth_precision_base) + Cz; //bottom right
 
                 //Compute u for the corners of the tile
-                int bu0 = (((long long)Au*bwx0 + (long long)Bu*bwy0)>>coeff_precision_base) + Cu; //top left
-                int bu1 = (((long long)Au*bwx0 + (long long)Bu*bwy1)>>coeff_precision_base) + Cu; //bottom left
-                int bu2 = (((long long)Au*bwx1 + (long long)Bu*bwy0)>>coeff_precision_base) + Cu; //top right
-                int bu3 = (((long long)Au*bwx1 + (long long)Bu*bwy1)>>coeff_precision_base) + Cu; //bottom right
+                int bu0 = ((Au*bwx0 + Bu*bwy0)>>coeff_precision_base) + Cu; //top left
+                int bu1 = ((Au*bwx0 + Bu*bwy1)>>coeff_precision_base) + Cu; //bottom left
+                int bu2 = ((Au*bwx1 + Bu*bwy0)>>coeff_precision_base) + Cu; //top right
+                int bu3 = ((Au*bwx1 + Bu*bwy1)>>coeff_precision_base) + Cu; //bottom right
 
                 //Compute v for the corners of the tile
-                int bv0 = (((long long)Av*bwx0 + (long long)Bv*bwy0)>>coeff_precision_base) + Cv; //top left
-                int bv1 = (((long long)Av*bwx0 + (long long)Bv*bwy1)>>coeff_precision_base) + Cv; //bottom left
-                int bv2 = (((long long)Av*bwx1 + (long long)Bv*bwy0)>>coeff_precision_base) + Cv; //top right
-                int bv3 = (((long long)Av*bwx1 + (long long)Bv*bwy1)>>coeff_precision_base) + Cv; //bottom right
+                int bv0 = ((Av*bwx0 + Bv*bwy0)>>coeff_precision_base) + Cv; //top left
+                int bv1 = ((Av*bwx0 + Bv*bwy1)>>coeff_precision_base) + Cv; //bottom left
+                int bv2 = ((Av*bwx1 + Bv*bwy0)>>coeff_precision_base) + Cv; //top right
+                int bv3 = ((Av*bwx1 + Bv*bwy1)>>coeff_precision_base) + Cv; //bottom right
 
                 TileInfo info;
                 // Delta *and* slope. Since we know that a tile width
@@ -1008,10 +1010,10 @@ void DrawTriangles(unsigned int flags)
                 // Accept whole block when totally covered
                 if(wc_bpp == 24 || wc_bpp == 32) {
                     if(a == 0xF && b == 0xF && c == 0xF) {
-                        DrawTileFilled888<true>(info);
+					  DrawTileFilled888<true>(info);
                     } else { // Partially covered
-                        DrawTileFilled888<false>(info);
-                    }
+					  DrawTileFilled888<false>(info);
+                    }				  
                 } else { // wc_bpp == 15 || wc_bpp == 16
                     if(a == 0xF && b == 0xF && c == 0xF) {
                         DrawTileFilled565<true>(info);
@@ -1024,6 +1026,8 @@ void DrawTriangles(unsigned int flags)
     }
     wc_colorbuffer->Unlock();
 }
+
+#endif
 
 bool ComputeCoeffMatrix(const VectorPOD4f& v1, const VectorPOD4f& v2, const VectorPOD4f& v3, MatrixPOD3f& m)
 {

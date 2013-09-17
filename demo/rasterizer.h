@@ -3,12 +3,12 @@
 #include <linealg.h>
 #include "framebuffer.h"
 //Tile size base. Must be POT
-const int Q = 4;
+const int Q = 3;
 //Actual Tile size
 const int q = (1<<Q);
 
 //Fixedpoint base for coefficients
-const int coeff_precision_base = 20;
+const int coeff_precision_base = 15;
 //Fixedpoint base for NDC coordinates (we convert screen-space coords to NDCs later)
 const int ndc_precision_base = 26;
 //Need 16-bits precision for z-buffer

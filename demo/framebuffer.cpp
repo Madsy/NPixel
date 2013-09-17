@@ -5,7 +5,7 @@
 unsigned int wc_width = 640;
 unsigned int wc_height = 480;
 /* bits per pixel */
-unsigned int wc_bpp = 16;
+unsigned int wc_bpp = 32;
 /* alpha not supported if alpha shift is 0 */
 bool wc_alphaSupported = false;
 /* Masks for R, G, B, A. Support 15, 16 and 24 bit modes */

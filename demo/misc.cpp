@@ -4,6 +4,8 @@
 #include "framebuffer.h"
 #include "myassert.h"
 
+#define FAKE_16BPP
+
 static void printVideoInfo()
 {
     const SDL_VideoInfo* info = SDL_GetVideoInfo();
@@ -92,6 +94,49 @@ static bool selectResolution()
     const SDL_PixelFormat* fmt = vinfo->vfmt;
     ASSERT(fmt != 0);
 
+#if defined (FAKE_15BPP) || defined (FAKE_16BPP)
+    /* Bits per pixel. Use 32 (or 24?) for Desktop, 16 for GP2X and Raspberry Pi */
+    wc_bpp = 16;
+    /* alpha not supported if alpha shift is 0 */
+    wc_alphaSupported = false;
+
+    wc_aLoss = 8;
+    wc_rLoss = 3;
+    wc_gLoss = 2;
+    wc_bLoss = 3;
+
+    /* Masks for R, G, B, A. Support 15, 16 and 24 bit modes */
+    wc_aMask = 0x00000000;
+    wc_rMask = 0xF800;
+    wc_gMask = 0x07E0;
+    wc_bMask = 0x001F;
+    /* Shifts for R, G, B, A. Support 15, 16 and 24 bit modes */
+    wc_aShift = 0;
+    wc_rShift = 11;
+    wc_gShift = 5;
+    wc_bShift = 0;
+#elif defined (FAKE_24BPP) || defined(FAKE_32BPP)
+    /* Bits per pixel. Use 32 (or 24?) for Desktop, 16 for GP2X and Raspberry Pi */
+    wc_bpp = 23;
+    /* alpha not supported if alpha shift is 0 */
+    wc_alphaSupported = true;
+
+    wc_aLoss = 0;
+    wc_rLoss = 0;
+    wc_gLoss = 0;
+    wc_bLoss = 0;
+
+    /* Masks for R, G, B, A. Support 15, 16 and 24 bit modes */
+    wc_aMask = 0xFF000000;
+    wc_rMask = 0x00FF0000;
+    wc_gMask = 0x0000FF00;
+    wc_bMask = 0x000000FF;
+    /* Shifts for R, G, B, A. Support 15, 16 and 24 bit modes */
+    wc_aShift = 24;
+    wc_rShift = 16;
+    wc_gShift = 8;
+    wc_bShift = 0;
+#else
     /* Bits per pixel. Use 32 (or 24?) for Desktop, 16 for GP2X and Raspberry Pi */
     wc_bpp = fmt->BitsPerPixel;
     /* alpha not supported if alpha shift is 0 */
@@ -114,7 +159,7 @@ static bool selectResolution()
     wc_rShift = fmt->Rshift;
     wc_gShift = fmt->Gshift;
     wc_bShift = fmt->Bshift;
-
+#endif
     return true;
 }
 
