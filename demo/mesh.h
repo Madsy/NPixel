@@ -5,13 +5,13 @@
 
 template<class T>
 struct Vertex {
-	Vector4<T> point;
-	Vector2<T> tcoord;
-	/* Arrays of vertex attributes */
-	std::vector<T>    attrib1D;
-	std::vector< Vector2<T> > attrib2D;
-	std::vector< Vector2<T> > attrib3D;
-	std::vector< Vector2<T> > attrib4D;
+    Vector4<T> point;
+    Vector2<T> tcoord;
+    /* Arrays of vertex attributes */
+    std::vector<T>    attrib1D;
+    std::vector< Vector2<T> > attrib2D;
+    std::vector< Vector2<T> > attrib3D;
+    std::vector< Vector2<T> > attrib4D;
 };
 
 typedef Vertex<float> Vertexf;
@@ -23,15 +23,15 @@ enum Attrib1DType {
 
 };
 enum Attrib2DType {
-	TEXCOORD=0
+    TEXCOORD=0
 };
 enum Attrib3DType {
-	COLOR_RGB=0,
-	NORMAL3
+    COLOR_RGB=0,
+    NORMAL3
 };
 enum Attrib4DType {
-	COLOR_RGBA=0,
-	NORMAL4
+    COLOR_RGBA=0,
+    NORMAL4
 };
 
 #endif

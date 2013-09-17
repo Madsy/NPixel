@@ -4,9 +4,9 @@
 #include <vector>
 
 struct Texture {
-	std::vector<unsigned int> texels;
-	unsigned int width;
-	unsigned int height;
+    std::vector<unsigned int> texels;
+    unsigned int width;
+    unsigned int height;
 };
 
 

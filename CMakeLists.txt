@@ -45,7 +45,7 @@ IF( ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 ENDIF()
 
 IF( ${CMAKE_BUILD_TYPE} STREQUAL "Release")
-  SET( CMAKE_CXX_FLAGS_RELEASE "-march=core2 -mfpmath=sse,387 -O3 -msse3 -mmmx")
+  SET( CMAKE_CXX_FLAGS_RELEASE "-mcpu=arm1176jzf-s -O3")
 ENDIF()
 
 IF( NOT CMAKE_PREFIX_PATH )
