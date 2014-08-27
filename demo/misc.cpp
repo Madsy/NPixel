@@ -32,7 +32,7 @@ static int getSupportedResolutions(SDL_Rect*** rects)
 {
   const SDL_VideoInfo* vinfo = SDL_GetVideoInfo();
   *rects = SDL_ListModes(vinfo->vfmt, SDL_SWSURFACE | SDL_FULLSCREEN);
-  if((int)(*rects) == -1){
+  if((ptrdiff_t)(*rects) == -1){
     *rects = 0;
     return -1;
   }
@@ -122,7 +122,7 @@ static bool selectResolution()
 void SR_Init()
 {
     #ifdef DEBUG
-        printVideoInfo();
+	//printVideoInfo();
 	#endif
 
 	SDL_Init(SDL_INIT_VIDEO);

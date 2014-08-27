@@ -144,17 +144,17 @@ static void loop(void* data)
 	SR_Render(SR_TEXCOORD0);
 	SR_Flip();
 
-#ifdef DEBUG
+//#ifdef DEBUG
 	float t2 = (float)SDL_GetTicks() * 0.001f;
 	float tdelta = t2 - time_elapsed;
 	float fps = 0.0f;
-	if(tdelta != 0.0f) fps = 1.0f / tdelta;
+	if(std::abs(tdelta) != 0.0f) fps = 1.0f / tdelta;
 	if(printAccum == 63) {
 		printf("time: %f, fps: %f\n", tdelta, fps);
 		printAccum = 0;
 	}
 	printAccum++;
-#endif
+//#endif
 }
 
 static void quit(void* data)

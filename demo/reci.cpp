@@ -1,6 +1,21 @@
 #include <linealg.h>
 #if defined (X86) || defined (X86_32) || defined (X86_64) || defined (IA32) || defined (IA64)
 
+int reci20(int val)
+{
+	int ret;
+	asm volatile (
+	     "xorl %%edx, %%edx;\n"
+	     "movl $0x100, %%edx;\n"
+	     "idiv %0;\n"
+	     "movl  %%eax, %1\n"
+	     :"=r"(ret)
+	     :"r"(val)
+	     :"%eax", "%edx"
+	);
+	return ret;
+}
+
 int reci11(int val)
 {
 	int ret;
@@ -48,6 +63,12 @@ int reci8(int val)
 }
 
 #else
+
+int reci20(int val)
+{
+  return (1LL << 40) / val;
+}
+
 int reci11(int val)
 {
   return (1 << 22) / val;

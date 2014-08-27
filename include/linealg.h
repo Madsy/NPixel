@@ -522,6 +522,7 @@ inline int fpceil10(int fp)
 
 
 /* NEW for X86, fix gcc bug. Reci computes 1/int */
+int reci20(int val);
 int reci15(int val);
 int reci8(int val);
 int reci11(int val);
