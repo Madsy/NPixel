@@ -3,6 +3,9 @@
 #include <iterator>
 #include <algorithm>
 #include <linealg.h>
+#include <IL/il.h>
+#include <IL/ilu.h>
+
 #include "framebuffer.h"
 #include "rasterizer.h"
 #include "vertexdata.h"
@@ -114,6 +117,9 @@ int main(int argc, char* argv[])
 	const int depth = 32;
 	Mesh mesh[NUM_MESHES];
 
+	ilInit();
+	iluInit();
+
 	//srand(time(NULL));
 	perspective(clipMatrix, 60.0f, (float)width/(float)height, 1.0f, 40.0f);
 
@@ -128,6 +134,10 @@ int main(int argc, char* argv[])
 	SR_SetCaption("Tile-Rasterizer Test");
 
 	const Texture* tex = ReadPNG("texture0.png");
+	if(!tex){
+		printf("Couldn't find texture0.png, aborting..\n");
+		return -1;
+	}
 	SR_BindTexture0(tex);
 
 	for(int i=0; i<NUM_MESHES; ++i)
